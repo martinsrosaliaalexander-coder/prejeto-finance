@@ -1,12 +1,17 @@
-import './globals.css';
 import type { Metadata } from 'next';
+import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Opervio Finance Lite',
-  description: 'Controle financeiro simples, bonito e vendável para pequenos negócios.',
+  title: 'OpenView | Opervio Finance Lite',
+  description:
+    'Dashboard financeiro com visual premium para controle, análise e apresentação comercial.',
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <html lang="pt-BR">
       <body>{children}</body>
