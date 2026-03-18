@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
-import jsPDF from 'jspdf';
+import { useEffect, useMemo, useState } from "react";
+import jsPDF from "jspdf";
 import {
   BarChart3,
   Calendar,
@@ -22,7 +21,7 @@ import {
   Users,
   Wallet,
   DollarSign,
-} from 'lucide-react';
+} from "lucide-react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -36,229 +35,178 @@ import {
   Cell,
   BarChart,
   Bar,
-} from 'recharts';
+} from "recharts";
 
-import { AppButton, AppCard, AppInput, AppSelect } from '@/components/ui';
-import { categories, chartColors } from '@/lib/constants';
-import { createClient } from '@/lib/supabase-browser';
-import { dateBR, money, monthLabel } from '@/lib/format';
-import type { Transaction, SummaryTotals } from '@/types';
+const initialTransactions = [
+  {
+    id: 1,
+    date: "2026-03-03",
+    type: "entrada",
+    category: "Serviços",
+    description: "Landing page - cliente clínica",
+    amount: 850,
+    status: "recebido",
+    client: "Clínica Bella Vita",
+  },
+  {
+    id: 2,
+    date: "2026-03-04",
+    type: "saida",
+    category: "Infraestrutura",
+    description: "Hospedagem anual",
+    amount: 219.9,
+    status: "pago",
+    client: "Opervio",
+  },
+  {
+    id: 3,
+    date: "2026-03-08",
+    type: "entrada",
+    category: "Projetos",
+    description: "Sinal software personalizado",
+    amount: 1200,
+    status: "recebido",
+    client: "Studio Performance",
+  },
+  {
+    id: 4,
+    date: "2026-03-11",
+    type: "saida",
+    category: "Ferramentas",
+    description: "Assinatura design",
+    amount: 59.9,
+    status: "pago",
+    client: "Opervio",
+  },
+  {
+    id: 5,
+    date: "2026-03-13",
+    type: "saida",
+    category: "Marketing",
+    description: "Impulsionamento",
+    amount: 80,
+    status: "pago",
+    client: "Instagram",
+  },
+];
 
-type AuthMode = 'login' | 'signup';
-type TabMode = 'dashboard' | 'lancamentos' | 'relatorios';
+const categories = [
+  "Serviços",
+  "Projetos",
+  "Consultoria",
+  "Infraestrutura",
+  "Ferramentas",
+  "Marketing",
+  "Transporte",
+  "Outros",
+];
 
-const initialForm = {
-  date: new Date().toISOString().slice(0, 10),
-  type: 'entrada',
-  category: 'Serviços',
-  description: '',
-  amount: '',
-  status: 'recebido',
-  client: '',
-};
+const chartColors = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#06b6d4"];
 
-export default function HomePage() {
-  const [supabaseReady, setSupabaseReady] = useState(true);
-  const [authMode, setAuthMode] = useState<AuthMode>('login');
-  const [sessionLoaded, setSessionLoaded] = useState(false);
-  const [userEmail, setUserEmail] = useState('');
+function money(value: number) {
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(value || 0);
+}
+
+function dateBR(value: string) {
+  return new Intl.DateTimeFormat("pt-BR").format(new Date(`${value}T12:00:00`));
+}
+
+function monthLabel(monthNumber: number) {
+  const labels = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+  return labels[monthNumber - 1] || "";
+}
+
+type Tone = "emerald" | "rose" | "blue" | "amber";
+type TabKey = "dashboard" | "lancamentos" | "relatorios";
+
+export default function OpervioFinanceLiteApp() {
+  const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [isLogged, setIsLogged] = useState(false);
-  const [authForm, setAuthForm] = useState({ email: '', password: '' });
-  const [authError, setAuthError] = useState('');
-  const [busyAuth, setBusyAuth] = useState(false);
-
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [busyTransactions, setBusyTransactions] = useState(false);
-  const [search, setSearch] = useState('');
-  const [filterType, setFilterType] = useState('todos');
-  const [monthFilter, setMonthFilter] = useState('todos');
-  const [tab, setTab] = useState<TabMode>('dashboard');
-  const [form, setForm] = useState(initialForm);
+  const [loginForm] = useState({ email: "admin@opervio.com", password: "123456" });
+  const [loginInput, setLoginInput] = useState({ email: "admin@opervio.com", password: "123456" });
+  const [transactions, setTransactions] = useState<typeof initialTransactions>([]);
+  const [search, setSearch] = useState("");
+  const [filterType, setFilterType] = useState("todos");
+  const [monthFilter, setMonthFilter] = useState("todos");
+  const [form, setForm] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    type: "entrada",
+    category: "Serviços",
+    description: "",
+    amount: "",
+    status: "recebido",
+    client: "",
+  });
 
   useEffect(() => {
-    try {
-      const supabase = createClient();
-      supabase.auth.getSession().then(({ data }) => {
-        const email = data.session?.user?.email ?? '';
-        setUserEmail(email);
-        setIsLogged(Boolean(data.session));
-        setSessionLoaded(true);
-      });
-      const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-        setUserEmail(session?.user?.email ?? '');
-        setIsLogged(Boolean(session));
-      });
-      return () => listener.subscription.unsubscribe();
-    } catch (_e) {
-      setSupabaseReady(false);
-      setSessionLoaded(true);
+    const savedTransactions = localStorage.getItem("opervio-finance-lite-transactions");
+    const savedAuth = localStorage.getItem("opervio-finance-lite-auth");
+    if (savedTransactions) {
+      setTransactions(JSON.parse(savedTransactions));
+    } else {
+      setTransactions(initialTransactions);
     }
+    if (savedAuth === "true") setIsLogged(true);
   }, []);
 
   useEffect(() => {
-    if (!isLogged || !supabaseReady) return;
-    void loadTransactions();
-  }, [isLogged, supabaseReady]);
-
-  async function loadTransactions() {
-    try {
-      setBusyTransactions(true);
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from('transactions')
-        .select('*')
-        .order('date', { ascending: false })
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      setTransactions((data || []) as Transaction[]);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setBusyTransactions(false);
+    if (transactions.length) {
+      localStorage.setItem("opervio-finance-lite-transactions", JSON.stringify(transactions));
     }
-  }
+  }, [transactions]);
 
-  async function handleAuthSubmit() {
-    setAuthError('');
-    setBusyAuth(true);
-    try {
-      const supabase = createClient();
-      if (authMode === 'login') {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: authForm.email,
-          password: authForm.password,
-        });
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.auth.signUp({
-          email: authForm.email,
-          password: authForm.password,
-        });
-        if (error) throw error;
-        setAuthError('Conta criada. Se sua instância exigir confirmação por e-mail, confirme antes de entrar.');
-        setAuthMode('login');
-      }
-    } catch (error) {
-      setAuthError(error instanceof Error ? error.message : 'Erro ao autenticar.');
-    } finally {
-      setBusyAuth(false);
-    }
-  }
+  useEffect(() => {
+    localStorage.setItem("opervio-finance-lite-auth", String(isLogged));
+  }, [isLogged]);
 
-  async function handleLogout() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    setTransactions([]);
-  }
-
-  async function handleAddTransaction() {
-    if (!form.description.trim() || !form.amount) return;
-    try {
-      const supabase = createClient();
-      const { data: authData } = await supabase.auth.getUser();
-      const userId = authData.user?.id;
-      if (!userId) return;
-
-      const payload = {
-        user_id: userId,
-        date: form.date,
-        type: form.type,
-        category: form.category,
-        description: form.description,
-        amount: Number(form.amount),
-        status: form.status,
-        client: form.client || null,
-      };
-
-      const { error } = await supabase.from('transactions').insert(payload);
-      if (error) throw error;
-      setForm(initialForm);
-      await loadTransactions();
-      setTab('lancamentos');
-    } catch (error) {
-      alert(error instanceof Error ? error.message : 'Não foi possível adicionar o lançamento.');
-    }
-  }
-
-  async function deleteTransaction(id: string) {
-    try {
-      const supabase = createClient();
-      const { error } = await supabase.from('transactions').delete().eq('id', id);
-      if (error) throw error;
-      await loadTransactions();
-    } catch (error) {
-      alert(error instanceof Error ? error.message : 'Não foi possível excluir.');
-    }
-  }
-
-  function exportJSON() {
-    const blob = new Blob([JSON.stringify(transactions, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'opervio-finance-lite.json';
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function exportPDF() {
-    const totals = summaryTotals;
-    const pdf = new jsPDF();
-    pdf.setFontSize(18);
-    pdf.text('Opervio Finance Lite - Relatório', 14, 18);
-    pdf.setFontSize(11);
-    pdf.text(`Usuário: ${userEmail || '-'}`, 14, 28);
-    pdf.text(`Entradas: ${money(totals.income)}`, 14, 38);
-    pdf.text(`Saídas: ${money(totals.expense)}`, 14, 46);
-    pdf.text(`Saldo: ${money(totals.balance)}`, 14, 54);
-    pdf.text(`Pendências: ${money(totals.pending)}`, 14, 62);
-    let y = 78;
-    pdf.setFontSize(12);
-    pdf.text('Lançamentos:', 14, y);
-    y += 8;
-    filteredTransactions.slice(0, 20).forEach((item) => {
-      const line = `${dateBR(item.date)} | ${item.description} | ${item.client || '-'} | ${item.type} | ${money(item.amount)}`;
-      pdf.setFontSize(9);
-      pdf.text(line, 14, y);
-      y += 7;
-    });
-    pdf.save('relatorio-opervio-finance-lite.pdf');
-  }
-
-  const filteredTransactions = useMemo(() => {
+  const filtered = useMemo(() => {
     return transactions.filter((item) => {
-      const haystack = `${item.description} ${item.category} ${item.client || ''}`.toLowerCase();
-      const textMatch = haystack.includes(search.toLowerCase());
-      const typeMatch = filterType === 'todos' ? true : item.type === filterType;
-      const monthMatch = monthFilter === 'todos' ? true : new Date(item.date).getMonth() + 1 === Number(monthFilter);
+      const text = `${item.description} ${item.category} ${item.client}`.toLowerCase();
+      const textMatch = text.includes(search.toLowerCase());
+      const typeMatch = filterType === "todos" ? true : item.type === filterType;
+      const monthMatch =
+        monthFilter === "todos"
+          ? true
+          : new Date(item.date).getMonth() + 1 === Number(monthFilter);
       return textMatch && typeMatch && monthMatch;
     });
   }, [transactions, search, filterType, monthFilter]);
 
-  const summaryTotals: SummaryTotals = useMemo(() => {
-    const income = transactions.filter((item) => item.type === 'entrada').reduce((acc, item) => acc + item.amount, 0);
-    const expense = transactions.filter((item) => item.type === 'saida').reduce((acc, item) => acc + item.amount, 0);
-    const pending = transactions.filter((item) => item.status === 'pendente').reduce((acc, item) => acc + item.amount, 0);
-    return { income, expense, balance: income - expense, pending };
+  const totals = useMemo(() => {
+    const income = transactions.filter((i) => i.type === "entrada").reduce((acc, i) => acc + i.amount, 0);
+    const expense = transactions.filter((i) => i.type === "saida").reduce((acc, i) => acc + i.amount, 0);
+    const pending = transactions.filter((i) => i.status === "pendente").reduce((acc, i) => acc + i.amount, 0);
+    return {
+      income,
+      expense,
+      balance: income - expense,
+      pending,
+    };
   }, [transactions]);
 
   const monthlyData = useMemo(() => {
     const map: Record<number, { month: number; entradas: number; saidas: number; saldo: number }> = {};
-    transactions.forEach((item) => {
-      const month = new Date(item.date).getMonth() + 1;
+    transactions.forEach((t) => {
+      const month = new Date(t.date).getMonth() + 1;
       if (!map[month]) map[month] = { month, entradas: 0, saidas: 0, saldo: 0 };
-      if (item.type === 'entrada') map[month].entradas += item.amount;
-      if (item.type === 'saida') map[month].saidas += item.amount;
+      if (t.type === "entrada") map[month].entradas += t.amount;
+      if (t.type === "saida") map[month].saidas += t.amount;
       map[month].saldo = map[month].entradas - map[month].saidas;
     });
     return Object.values(map)
       .sort((a, b) => a.month - b.month)
-      .map((item) => ({ ...item, label: monthLabel(item.month) }));
+      .map((item) => ({
+        ...item,
+        label: monthLabel(item.month),
+      }));
   }, [transactions]);
 
   const expensesByCategory = useMemo(() => {
     const grouped = transactions
-      .filter((item) => item.type === 'saida')
+      .filter((t) => t.type === "saida")
       .reduce<Record<string, number>>((acc, item) => {
         acc[item.category] = (acc[item.category] || 0) + item.amount;
         return acc;
@@ -270,9 +218,9 @@ export default function HomePage() {
 
   const topClients = useMemo(() => {
     const grouped = transactions
-      .filter((item) => item.type === 'entrada')
+      .filter((t) => t.type === "entrada")
       .reduce<Record<string, number>>((acc, item) => {
-        const key = item.client || 'Sem cliente';
+        const key = item.client || "Sem cliente";
         acc[key] = (acc[key] || 0) + item.amount;
         return acc;
       }, {});
@@ -282,385 +230,689 @@ export default function HomePage() {
       .map(([client, total]) => ({ client, total }));
   }, [transactions]);
 
-  if (!sessionLoaded) {
-    return <LoadingState />;
+  function handleLogin() {
+    if (loginInput.email === loginForm.email && loginInput.password === loginForm.password) {
+      setIsLogged(true);
+    }
   }
 
-  if (!supabaseReady) {
-    return <MissingConfigState />;
+  function handleLogout() {
+    setIsLogged(false);
+  }
+
+  function handleAddTransaction() {
+    if (!form.description.trim() || !form.amount) return;
+    const newItem = {
+      id: Date.now(),
+      date: form.date,
+      type: form.type,
+      category: form.category,
+      description: form.description,
+      amount: Number(form.amount),
+      status: form.status,
+      client: form.client,
+    };
+    setTransactions((prev) => [newItem, ...prev]);
+    setForm((prev) => ({ ...prev, description: "", amount: "", client: "" }));
+  }
+
+  function deleteTransaction(id: number) {
+    setTransactions((prev) => prev.filter((item) => item.id !== id));
+  }
+
+  function exportJSON() {
+    const blob = new Blob([JSON.stringify(transactions, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "opervio-finance-lite.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportPDF() {
+    const pdf = new jsPDF();
+    pdf.setFontSize(18);
+    pdf.text("Opervio Finance Lite - Relatório", 14, 18);
+    pdf.setFontSize(11);
+    pdf.text(`Entradas: ${money(totals.income)}`, 14, 32);
+    pdf.text(`Saídas: ${money(totals.expense)}`, 14, 40);
+    pdf.text(`Saldo: ${money(totals.balance)}`, 14, 48);
+    pdf.text(`Pendências: ${money(totals.pending)}`, 14, 56);
+
+    let y = 72;
+    pdf.setFontSize(12);
+    pdf.text("Lançamentos:", 14, y);
+    y += 10;
+
+    filtered.slice(0, 18).forEach((item) => {
+      const line = `${dateBR(item.date)} | ${item.description} | ${item.client || "-"} | ${item.type} | ${money(item.amount)}`;
+      pdf.setFontSize(9);
+      pdf.text(line, 14, y);
+      y += 7;
+    });
+
+    pdf.save("relatorio-opervio-finance-lite.pdf");
   }
 
   if (!isLogged) {
     return (
-      <div className="relative mx-auto flex min-h-screen max-w-6xl items-center px-4 py-10">
-        <div className="grid w-full gap-6 lg:grid-cols-2">
-          <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col justify-center">
-            <div className="mb-4 inline-flex w-fit items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">
-              <Wallet className="h-4 w-4" /> Opervio Finance Lite
+      <div className="min-h-screen bg-slate-950 text-slate-50">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.18),transparent_30%),radial-gradient(circle_at_80%_20%,rgba(16,185,129,0.12),transparent_20%)]" />
+        <div className="relative mx-auto flex min-h-screen max-w-6xl items-center px-4 py-10">
+          <div className="grid w-full gap-6 lg:grid-cols-2">
+            <div className="flex flex-col justify-center">
+              <div className="mb-4 inline-flex w-fit items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">
+                <Wallet className="h-4 w-4" />
+                Opervio Finance Lite
+              </div>
+              <h1 className="text-4xl font-bold tracking-tight md:text-5xl">Controle financeiro com cara de produto real.</h1>
+              <p className="mt-4 max-w-xl text-slate-300">
+                Faça login para acessar o dashboard, os gráficos, os lançamentos e a geração de relatórios PDF.
+              </p>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <Badge>Login simples</Badge>
+                <Badge>Dashboard</Badge>
+                <Badge>Gráficos</Badge>
+                <Badge>PDF</Badge>
+              </div>
             </div>
-            <h1 className="text-4xl font-bold tracking-tight md:text-5xl">Produto final pronto para Supabase + Vercel.</h1>
-            <p className="mt-4 max-w-xl text-slate-300">
-              Login real, banco de dados online, dashboard, gráficos, relatórios PDF e exportação. Faça login ou crie sua conta para começar.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Badge>Supabase Auth</Badge>
-              <Badge>Postgres</Badge>
-              <Badge>Dashboard</Badge>
-              <Badge>PDF</Badge>
-            </div>
-          </motion.div>
 
-          <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
-            <AppCard>
-              <div className="p-6">
-                <div className="mb-4 flex gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 p-1">
-                  <button
-                    onClick={() => setAuthMode('login')}
-                    className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold ${authMode === 'login' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}
-                  >
-                    Entrar
-                  </button>
-                  <button
-                    onClick={() => setAuthMode('signup')}
-                    className={`flex-1 rounded-xl px-4 py-2 text-sm font-semibold ${authMode === 'signup' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}
-                  >
-                    Criar conta
-                  </button>
-                </div>
-                <div className="mb-6 flex items-center gap-2 text-xl font-semibold">
-                  <Lock className="h-5 w-5 text-blue-300" />
-                  {authMode === 'login' ? 'Entrar no sistema' : 'Criar nova conta'}
-                </div>
-                <div className="space-y-4">
-                  <div>
-                    <label className="mb-2 block text-sm text-slate-300">E-mail</label>
-                    <div className="relative">
-                      <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                      <AppInput
-                        type="email"
-                        value={authForm.email}
-                        onChange={(e) => setAuthForm((prev) => ({ ...prev, email: e.target.value }))}
-                        className="pl-11"
-                        placeholder="voce@empresa.com"
+            <div>
+              <Card>
+                <CardHeader>
+                  <CardTitle>
+                    <div className="flex items-center gap-2 text-xl">
+                      <Lock className="h-5 w-5 text-blue-300" />
+                      Entrar no sistema
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="grid gap-2">
+                      <Label>E-mail</Label>
+                      <div className="relative">
+                        <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                        <TextInput
+                          value={loginInput.email}
+                          onChange={(e) => setLoginInput((prev) => ({ ...prev, email: e.target.value }))}
+                          className="pl-10"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Senha</Label>
+                      <TextInput
+                        type="password"
+                        value={loginInput.password}
+                        onChange={(e) => setLoginInput((prev) => ({ ...prev, password: e.target.value }))}
                       />
                     </div>
+                    <PrimaryButton onClick={handleLogin} className="w-full">
+                      Acessar dashboard
+                    </PrimaryButton>
+                    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
+                      Demo: admin@opervio.com / 123456
+                    </div>
                   </div>
-                  <div>
-                    <label className="mb-2 block text-sm text-slate-300">Senha</label>
-                    <AppInput
-                      type="password"
-                      value={authForm.password}
-                      onChange={(e) => setAuthForm((prev) => ({ ...prev, password: e.target.value }))}
-                      placeholder="Mínimo 6 caracteres"
-                    />
-                  </div>
-                  {authError && <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-300">{authError}</div>}
-                  <AppButton disabled={busyAuth} onClick={handleAuthSubmit} className="w-full">
-                    {busyAuth ? 'Processando...' : authMode === 'login' ? 'Acessar dashboard' : 'Criar conta'}
-                  </AppButton>
-                </div>
-              </div>
-            </AppCard>
-          </motion.div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="relative mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
-      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mb-6 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-        <AppCard>
-          <div className="p-6 md:p-8">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">
-              <Wallet className="h-4 w-4" /> Opervio Finance Lite
-            </div>
-            <h1 className="text-3xl font-bold tracking-tight md:text-5xl">Painel financeiro simples, bonito e pronto para produção.</h1>
-            <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300 md:text-base">
-              Bem-vindo, {userEmail}. Controle lançamentos, acompanhe o caixa, gere relatórios PDF e use o produto como base comercial da Opervio.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Badge>Supabase Auth</Badge>
-              <Badge>Postgres</Badge>
-              <Badge>Dashboard</Badge>
-              <Badge>PDF</Badge>
-              <Badge>Vercel Ready</Badge>
-            </div>
-          </div>
-        </AppCard>
-
-        <AppCard className="bg-gradient-to-br from-emerald-500/10 to-slate-900">
-          <div className="flex h-full flex-col justify-between p-6">
-            <div>
-              <div className="mb-3 inline-flex rounded-xl bg-emerald-500/15 p-3 text-emerald-300"><BarChart3 className="h-5 w-5" /></div>
-              <h2 className="text-xl font-semibold">Visão geral</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-300">Versão final base para evoluir depois para multiempresa, cobrança e planos.</p>
-            </div>
-            <div className="mt-5 grid gap-3">
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Saldo atual</div>
-                <div className="mt-2 text-3xl font-bold text-emerald-300">{money(summaryTotals.balance)}</div>
-              </div>
-              <div className="flex gap-2">
-                <AppButton onClick={exportPDF} className="flex-1"><FileText className="mr-2 h-4 w-4" /> PDF</AppButton>
-                <AppButton onClick={exportJSON} variant="outline" className="flex-1"><Download className="mr-2 h-4 w-4" /> JSON</AppButton>
-                <AppButton onClick={handleLogout} variant="ghost"><LogOut className="h-4 w-4" /></AppButton>
-              </div>
-            </div>
-          </div>
-        </AppCard>
-      </motion.div>
-
-      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard title="Entradas" value={money(summaryTotals.income)} icon={<TrendingUp className="h-5 w-5" />} tone="emerald" />
-        <SummaryCard title="Saídas" value={money(summaryTotals.expense)} icon={<TrendingDown className="h-5 w-5" />} tone="rose" />
-        <SummaryCard title="Saldo" value={money(summaryTotals.balance)} icon={<DollarSign className="h-5 w-5" />} tone="blue" />
-        <SummaryCard title="Pendências" value={money(summaryTotals.pending)} icon={<Receipt className="h-5 w-5" />} tone="amber" />
-      </motion.div>
-
-      <div className="mb-6 grid w-full grid-cols-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-1">
-        {(['dashboard', 'lancamentos', 'relatorios'] as TabMode[]).map((item) => (
-          <button
-            key={item}
-            onClick={() => setTab(item)}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold capitalize ${tab === item ? 'bg-blue-600 text-white' : 'text-slate-400'}`}
-          >
-            {item}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'dashboard' && (
-        <div className="space-y-6">
-          <div className="grid gap-6 xl:grid-cols-2">
-            <AppCard>
-              <div className="p-6">
-                <div className="mb-4 flex items-center gap-2 text-xl font-semibold"><BarChart3 className="h-5 w-5 text-blue-300" /> Evolução mensal do caixa</div>
-                <div className="h-[320px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={monthlyData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                      <XAxis dataKey="label" stroke="#94a3b8" />
-                      <YAxis stroke="#94a3b8" />
-                      <Tooltip contentStyle={{ background: '#020617', border: '1px solid #1e293b', borderRadius: 16 }} />
-                      <Line type="monotone" dataKey="entradas" stroke="#10b981" strokeWidth={3} />
-                      <Line type="monotone" dataKey="saidas" stroke="#ef4444" strokeWidth={3} />
-                      <Line type="monotone" dataKey="saldo" stroke="#3b82f6" strokeWidth={3} />
-                    </LineChart>
-                  </ResponsiveContainer>
+    <div className="min-h-screen bg-slate-950 text-slate-50">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.18),transparent_30%),radial-gradient(circle_at_80%_20%,rgba(16,185,129,0.12),transparent_20%)]" />
+      <div className="relative mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
+        <div className="mb-6 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+          <Card>
+            <CardContent>
+              <div className="p-6 md:p-8">
+                <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">
+                  <Wallet className="h-4 w-4" />
+                  Opervio Finance Lite
+                </div>
+                <h1 className="text-3xl font-bold tracking-tight md:text-5xl">Painel financeiro simples, bonito e vendável.</h1>
+                <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300 md:text-base">
+                  Um produto-base para autônomos, pequenos negócios e clientes da Opervio acompanharem o caixa com clareza e visual profissional.
+                </p>
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <Badge>Login</Badge>
+                  <Badge>Dashboard</Badge>
+                  <Badge>Relatórios</Badge>
+                  <Badge>PDF</Badge>
+                  <Badge>Exportação</Badge>
                 </div>
               </div>
-            </AppCard>
-            <AppCard>
-              <div className="p-6">
-                <div className="mb-4 flex items-center gap-2 text-xl font-semibold"><PieChartIcon className="h-5 w-5 text-amber-300" /> Despesas por categoria</div>
-                <div className="h-[320px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie data={expensesByCategory} dataKey="value" nameKey="name" innerRadius={60} outerRadius={100} paddingAngle={3}>
-                        {expensesByCategory.map((entry, index) => <Cell key={entry.name} fill={chartColors[index % chartColors.length]} />)}
-                      </Pie>
-                      <Tooltip contentStyle={{ background: '#020617', border: '1px solid #1e293b', borderRadius: 16 }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </AppCard>
-          </div>
+            </CardContent>
+          </Card>
 
-          <div className="grid gap-6 xl:grid-cols-2">
-            <AppCard>
-              <div className="p-6">
-                <div className="mb-4 flex items-center gap-2 text-xl font-semibold"><Users className="h-5 w-5 text-emerald-300" /> Top clientes por receita</div>
-                <div className="h-[320px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={topClients} layout="vertical" margin={{ left: 10, right: 10 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                      <XAxis type="number" stroke="#94a3b8" />
-                      <YAxis type="category" dataKey="client" stroke="#94a3b8" width={110} />
-                      <Tooltip contentStyle={{ background: '#020617', border: '1px solid #1e293b', borderRadius: 16 }} />
-                      <Bar dataKey="total" radius={[0, 10, 10, 0]} fill="#10b981" />
-                    </BarChart>
-                  </ResponsiveContainer>
+          <Card className="bg-gradient-to-br from-emerald-500/10 to-slate-900">
+            <CardContent>
+              <div className="flex h-full flex-col justify-between p-6">
+                <div>
+                  <div className="mb-3 inline-flex rounded-xl bg-emerald-500/15 p-3 text-emerald-300">
+                    <BarChart3 className="h-5 w-5" />
+                  </div>
+                  <h2 className="text-xl font-semibold">Visão geral</h2>
+                  <p className="mt-2 text-sm leading-6 text-slate-300">
+                    Base ideal para evoluir para versão Pro com banco de dados, multiusuário e cobrança recorrente.
+                  </p>
+                </div>
+                <div className="mt-5 grid gap-3">
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                    <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Saldo atual</div>
+                    <div className="mt-2 text-3xl font-bold text-emerald-300">{money(totals.balance)}</div>
+                  </div>
+                  <div className="flex gap-2">
+                    <PrimaryButton onClick={exportPDF} className="flex-1">
+                      <FileText className="mr-2 h-4 w-4" /> PDF
+                    </PrimaryButton>
+                    <OutlineButton onClick={exportJSON} className="flex-1">
+                      <Download className="mr-2 h-4 w-4" /> JSON
+                    </OutlineButton>
+                    <GhostButton onClick={handleLogout}>
+                      <LogOut className="h-4 w-4" />
+                    </GhostButton>
+                  </div>
                 </div>
               </div>
-            </AppCard>
-            <AppCard>
-              <div className="space-y-4 p-6">
-                <div className="flex items-center gap-2 text-xl font-semibold"><Calendar className="h-5 w-5 text-blue-300" /> Resumo operacional</div>
-                <InfoRow label="Total de lançamentos" value={String(transactions.length)} />
-                <InfoRow label="Entradas registradas" value={String(transactions.filter((t) => t.type === 'entrada').length)} />
-                <InfoRow label="Saídas registradas" value={String(transactions.filter((t) => t.type === 'saida').length)} />
-                <InfoRow label="Receitas pendentes" value={money(summaryTotals.pending)} />
-                <InfoRow label="Maior cliente" value={topClients[0]?.client || '—'} />
-              </div>
-            </AppCard>
-          </div>
+            </CardContent>
+          </Card>
         </div>
-      )}
 
-      {tab === 'lancamentos' && (
-        <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-          <AppCard>
-            <div className="grid gap-4 p-6">
-              <div className="flex items-center gap-2 text-xl font-semibold"><Plus className="h-5 w-5 text-blue-300" /> Novo lançamento</div>
-              <Field label="Descrição"><AppInput value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} placeholder="Ex.: Pagamento cliente X" /></Field>
-              <Field label="Cliente / origem"><AppInput value={form.client} onChange={(e) => setForm((prev) => ({ ...prev, client: e.target.value }))} placeholder="Ex.: Clínica Bella Vita" /></Field>
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="Valor"><AppInput type="number" value={form.amount} onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))} /></Field>
-                <Field label="Data"><AppInput type="date" value={form.date} onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))} /></Field>
+        <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <SummaryCard title="Entradas" value={money(totals.income)} icon={<TrendingUp className="h-5 w-5" />} tone="emerald" />
+          <SummaryCard title="Saídas" value={money(totals.expense)} icon={<TrendingDown className="h-5 w-5" />} tone="rose" />
+          <SummaryCard title="Saldo" value={money(totals.balance)} icon={<DollarSign className="h-5 w-5" />} tone="blue" />
+          <SummaryCard title="Pendências" value={money(totals.pending)} icon={<Receipt className="h-5 w-5" />} tone="amber" />
+        </div>
+
+        <div className="space-y-6">
+          <div className="grid w-full grid-cols-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-1">
+            <TabButton active={activeTab === "dashboard"} onClick={() => setActiveTab("dashboard")}>Dashboard</TabButton>
+            <TabButton active={activeTab === "lancamentos"} onClick={() => setActiveTab("lancamentos")}>Lançamentos</TabButton>
+            <TabButton active={activeTab === "relatorios"} onClick={() => setActiveTab("relatorios")}>Relatórios</TabButton>
+          </div>
+
+          {activeTab === "dashboard" && (
+            <div className="space-y-6">
+              <div className="grid gap-6 xl:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>
+                      <div className="flex items-center gap-2 text-xl">
+                        <BarChart3 className="h-5 w-5 text-blue-300" />
+                        Evolução mensal do caixa
+                      </div>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[320px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={monthlyData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                          <XAxis dataKey="label" stroke="#94a3b8" />
+                          <YAxis stroke="#94a3b8" />
+                          <Tooltip contentStyle={{ background: "#020617", border: "1px solid #1e293b", borderRadius: 16 }} />
+                          <Line type="monotone" dataKey="entradas" stroke="#10b981" strokeWidth={3} />
+                          <Line type="monotone" dataKey="saidas" stroke="#ef4444" strokeWidth={3} />
+                          <Line type="monotone" dataKey="saldo" stroke="#3b82f6" strokeWidth={3} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>
+                      <div className="flex items-center gap-2 text-xl">
+                        <PieChartIcon className="h-5 w-5 text-amber-300" />
+                        Despesas por categoria
+                      </div>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[320px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie data={expensesByCategory} dataKey="value" nameKey="name" innerRadius={60} outerRadius={100} paddingAngle={3}>
+                            {expensesByCategory.map((entry, index) => (
+                              <Cell key={entry.name} fill={chartColors[index % chartColors.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip contentStyle={{ background: "#020617", border: "1px solid #1e293b", borderRadius: 16 }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="Tipo">
-                  <AppSelect value={form.type} onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value }))}>
-                    <option value="entrada">Entrada</option>
-                    <option value="saida">Saída</option>
-                  </AppSelect>
-                </Field>
-                <Field label="Status">
-                  <AppSelect value={form.status} onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}>
-                    <option value="recebido">Recebido</option>
-                    <option value="pendente">Pendente</option>
-                    <option value="pago">Pago</option>
-                  </AppSelect>
-                </Field>
+
+              <div className="grid gap-6 xl:grid-cols-2">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>
+                      <div className="flex items-center gap-2 text-xl">
+                        <Users className="h-5 w-5 text-emerald-300" />
+                        Top clientes por receita
+                      </div>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="h-[320px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={topClients} layout="vertical" margin={{ left: 10, right: 10 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                          <XAxis type="number" stroke="#94a3b8" />
+                          <YAxis type="category" dataKey="client" stroke="#94a3b8" width={110} />
+                          <Tooltip contentStyle={{ background: "#020617", border: "1px solid #1e293b", borderRadius: 16 }} />
+                          <Bar dataKey="total" radius={[0, 10, 10, 0]} fill="#10b981" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>
+                      <div className="flex items-center gap-2 text-xl">
+                        <Calendar className="h-5 w-5 text-blue-300" />
+                        Resumo operacional
+                      </div>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <InfoRow label="Total de lançamentos" value={String(transactions.length)} />
+                      <InfoRow label="Entradas registradas" value={String(transactions.filter((t) => t.type === "entrada").length)} />
+                      <InfoRow label="Saídas registradas" value={String(transactions.filter((t) => t.type === "saida").length)} />
+                      <InfoRow label="Receitas pendentes" value={money(transactions.filter((t) => t.status === "pendente").reduce((a, b) => a + b.amount, 0))} />
+                      <InfoRow label="Maior cliente" value={topClients[0]?.client || "—"} />
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
-              <Field label="Categoria">
-                <AppSelect value={form.category} onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value }))}>
-                  {categories.map((category) => <option key={category} value={category}>{category}</option>)}
-                </AppSelect>
-              </Field>
-              <AppButton onClick={handleAddTransaction} className="w-full">Adicionar lançamento</AppButton>
             </div>
-          </AppCard>
+          )}
 
-          <AppCard>
-            <div className="p-6">
-              <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div className="text-xl font-semibold">Lançamentos</div>
-                <div className="flex flex-col gap-3 md:flex-row">
-                  <div className="relative min-w-[220px]">
-                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                    <AppInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar descrição, categoria ou cliente" className="pl-10" />
-                  </div>
-                  <div className="flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 px-3">
-                    <Filter className="h-4 w-4 text-slate-500" />
-                    <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="h-10 bg-transparent text-sm text-slate-200 outline-none">
-                      <option value="todos">Todos</option>
-                      <option value="entrada">Entradas</option>
-                      <option value="saida">Saídas</option>
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 px-3">
-                    <Calendar className="h-4 w-4 text-slate-500" />
-                    <select value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="h-10 bg-transparent text-sm text-slate-200 outline-none">
-                      <option value="todos">Todos os meses</option>
-                      {Array.from({ length: 12 }).map((_, i) => <option key={i + 1} value={String(i + 1)}>{monthLabel(i + 1)}</option>)}
-                    </select>
-                  </div>
-                </div>
-              </div>
-              <div className="space-y-3">
-                {busyTransactions ? (
-                  <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/50 p-10 text-center text-slate-400">Carregando lançamentos...</div>
-                ) : filteredTransactions.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/50 p-10 text-center text-slate-400">Nenhum lançamento encontrado com os filtros atuais.</div>
-                ) : (
-                  filteredTransactions.map((item) => (
-                    <div key={item.id} className="grid gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 p-4 md:grid-cols-[1fr_auto_auto] md:items-center">
-                      <div>
-                        <div className="font-medium text-slate-100">{item.description}</div>
-                        <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-400">
-                          <span className="rounded-full border border-slate-800 px-2 py-1">{item.category}</span>
-                          <span className="rounded-full border border-slate-800 px-2 py-1">{dateBR(item.date)}</span>
-                          <span className="rounded-full border border-slate-800 px-2 py-1">{item.status}</span>
-                          <span className="rounded-full border border-slate-800 px-2 py-1">{item.client || 'Sem cliente'}</span>
-                        </div>
+          {activeTab === "lancamentos" && (
+            <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+              <Card>
+                <CardHeader>
+                  <CardTitle>
+                    <div className="flex items-center gap-2 text-xl">
+                      <Plus className="h-5 w-5 text-blue-300" />
+                      Novo lançamento
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-4">
+                    <div className="grid gap-2">
+                      <Label>Descrição</Label>
+                      <TextInput
+                        value={form.description}
+                        onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
+                        placeholder="Ex.: Pagamento cliente X"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Cliente / origem</Label>
+                      <TextInput
+                        value={form.client}
+                        onChange={(e) => setForm((prev) => ({ ...prev, client: e.target.value }))}
+                        placeholder="Ex.: Clínica Bella Vita"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label>Valor</Label>
+                        <TextInput
+                          type="number"
+                          value={form.amount}
+                          onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))}
+                          placeholder="0,00"
+                        />
                       </div>
-                      <div className={`text-right text-lg font-semibold ${item.type === 'entrada' ? 'text-emerald-300' : 'text-rose-300'}`}>
-                        {item.type === 'entrada' ? '+' : '-'} {money(item.amount)}
-                      </div>
-                      <div className="flex justify-end">
-                        <AppButton variant="ghost" onClick={() => deleteTransaction(item.id)} className="px-3"><Trash2 className="h-4 w-4" /></AppButton>
+                      <div className="grid gap-2">
+                        <Label>Data</Label>
+                        <TextInput
+                          type="date"
+                          value={form.date}
+                          onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))}
+                        />
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
-            </div>
-          </AppCard>
-        </div>
-      )}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label>Tipo</Label>
+                        <NativeSelect
+                          value={form.type}
+                          onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value }))}
+                          options={[
+                            { value: "entrada", label: "Entrada" },
+                            { value: "saida", label: "Saída" },
+                          ]}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>Status</Label>
+                        <NativeSelect
+                          value={form.status}
+                          onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}
+                          options={[
+                            { value: "recebido", label: "Recebido" },
+                            { value: "pendente", label: "Pendente" },
+                            { value: "pago", label: "Pago" },
+                          ]}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Categoria</Label>
+                      <NativeSelect
+                        value={form.category}
+                        onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value }))}
+                        options={categories.map((category) => ({ value: category, label: category }))}
+                      />
+                    </div>
+                    <PrimaryButton onClick={handleAddTransaction}>
+                      Adicionar lançamento
+                    </PrimaryButton>
+                  </div>
+                </CardContent>
+              </Card>
 
-      {tab === 'relatorios' && (
-        <div className="grid gap-6 xl:grid-cols-2">
-          <AppCard>
-            <div className="space-y-4 p-6 text-sm text-slate-300">
-              <div className="flex items-center gap-2 text-xl font-semibold"><FileText className="h-5 w-5 text-blue-300" /> Relatório executivo</div>
-              <ReportLine label="Receita total" value={money(summaryTotals.income)} />
-              <ReportLine label="Despesa total" value={money(summaryTotals.expense)} />
-              <ReportLine label="Saldo operacional" value={money(summaryTotals.balance)} />
-              <ReportLine label="Pendências" value={money(summaryTotals.pending)} />
-              <ReportLine label="Quantidade de lançamentos" value={String(transactions.length)} />
-              <div className="pt-4"><AppButton onClick={exportPDF}><FileText className="mr-2 h-4 w-4" /> Gerar relatório PDF</AppButton></div>
+              <Card>
+                <CardHeader>
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <CardTitle>Lançamentos</CardTitle>
+                    <div className="flex flex-col gap-3 md:flex-row">
+                      <div className="relative min-w-[220px]">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                        <TextInput
+                          value={search}
+                          onChange={(e) => setSearch(e.target.value)}
+                          placeholder="Buscar descrição, categoria ou cliente"
+                          className="pl-10"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 px-3">
+                        <Filter className="h-4 w-4 text-slate-500" />
+                        <select
+                          value={filterType}
+                          onChange={(e) => setFilterType(e.target.value)}
+                          className="h-10 bg-transparent text-sm text-slate-200 outline-none"
+                        >
+                          <option value="todos">Todos</option>
+                          <option value="entrada">Entradas</option>
+                          <option value="saida">Saídas</option>
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 px-3">
+                        <Calendar className="h-4 w-4 text-slate-500" />
+                        <select
+                          value={monthFilter}
+                          onChange={(e) => setMonthFilter(e.target.value)}
+                          className="h-10 bg-transparent text-sm text-slate-200 outline-none"
+                        >
+                          <option value="todos">Todos os meses</option>
+                          {Array.from({ length: 12 }).map((_, i) => (
+                            <option key={i + 1} value={String(i + 1)}>
+                              {monthLabel(i + 1)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {filtered.map((item) => (
+                      <div key={item.id} className="grid gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 p-4 md:grid-cols-[1fr_auto_auto] md:items-center">
+                        <div>
+                          <div className="font-medium text-slate-100">{item.description}</div>
+                          <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-400">
+                            <span className="rounded-full border border-slate-800 px-2 py-1">{item.category}</span>
+                            <span className="rounded-full border border-slate-800 px-2 py-1">{dateBR(item.date)}</span>
+                            <span className="rounded-full border border-slate-800 px-2 py-1">{item.status}</span>
+                            <span className="rounded-full border border-slate-800 px-2 py-1">{item.client || "Sem cliente"}</span>
+                          </div>
+                        </div>
+                        <div className={`text-right text-lg font-semibold ${item.type === "entrada" ? "text-emerald-300" : "text-rose-300"}`}>
+                          {item.type === "entrada" ? "+" : "-"} {money(item.amount)}
+                        </div>
+                        <div className="flex justify-end">
+                          <GhostButton onClick={() => deleteTransaction(item.id)}>
+                            <Trash2 className="h-4 w-4" />
+                          </GhostButton>
+                        </div>
+                      </div>
+                    ))}
+                    {filtered.length === 0 && (
+                      <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/50 p-10 text-center text-slate-400">
+                        Nenhum lançamento encontrado com os filtros atuais.
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-          </AppCard>
+          )}
 
-          <AppCard>
-            <div className="space-y-4 p-6 text-sm text-slate-300">
-              <div className="flex items-center gap-2 text-xl font-semibold"><Download className="h-5 w-5 text-emerald-300" /> Exportação e continuidade</div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">Os dados agora ficam salvos no Supabase e podem ser levados para produção na Vercel.</div>
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">Use o arquivo SQL incluso no projeto para criar a tabela e as políticas RLS antes do deploy.</div>
-              <AppButton onClick={exportJSON} variant="outline"><Download className="mr-2 h-4 w-4" /> Exportar backup JSON</AppButton>
+          {activeTab === "relatorios" && (
+            <div className="grid gap-6 xl:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle>
+                    <div className="flex items-center gap-2 text-xl">
+                      <FileText className="h-5 w-5 text-blue-300" />
+                      Relatório executivo
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4 text-sm text-slate-300">
+                    <ReportLine label="Receita total" value={money(totals.income)} />
+                    <ReportLine label="Despesa total" value={money(totals.expense)} />
+                    <ReportLine label="Saldo operacional" value={money(totals.balance)} />
+                    <ReportLine label="Pendências" value={money(totals.pending)} />
+                    <ReportLine label="Quantidade de lançamentos" value={String(transactions.length)} />
+                    <div className="pt-4">
+                      <PrimaryButton onClick={exportPDF}>
+                        <FileText className="mr-2 h-4 w-4" />
+                        Gerar relatório PDF
+                      </PrimaryButton>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>
+                    <div className="flex items-center gap-2 text-xl">
+                      <Download className="h-5 w-5 text-emerald-300" />
+                      Exportação e continuidade
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4 text-sm text-slate-300">
+                    <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                      Os dados ficam salvos localmente no navegador durante esta demo.
+                    </div>
+                    <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
+                      Na versão real, isso será substituído por banco de dados e autenticação segura.
+                    </div>
+                    <OutlineButton onClick={exportJSON}>
+                      <Download className="mr-2 h-4 w-4" />
+                      Exportar backup JSON
+                    </OutlineButton>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-          </AppCard>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
 
-function LoadingState() {
-  return <div className="flex min-h-screen items-center justify-center text-slate-400">Carregando sistema...</div>;
+function Card({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return <div className={`rounded-3xl border border-slate-800 bg-slate-900/80 backdrop-blur-xl shadow-2xl shadow-blue-950/20 ${className}`}>{children}</div>;
 }
 
-function MissingConfigState() {
+function CardHeader({ children }: { children: React.ReactNode }) {
+  return <div className="p-6 pb-0">{children}</div>;
+}
+
+function CardContent({ children }: { children: React.ReactNode }) {
+  return <div className="p-6">{children}</div>;
+}
+
+function CardTitle({ children }: { children: React.ReactNode }) {
+  return <div className="text-xl font-semibold">{children}</div>;
+}
+
+function TextInput({
+  className = "",
+  ...props
+}: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
-    <div className="mx-auto flex min-h-screen max-w-3xl items-center px-4">
-      <AppCard className="w-full">
-        <div className="space-y-4 p-8">
-          <div className="text-2xl font-bold">Supabase não configurado</div>
-          <p className="text-slate-300">Defina NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY no arquivo .env.local para usar o sistema.</p>
-        </div>
-      </AppCard>
-    </div>
+    <input
+      {...props}
+      className={`h-11 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-4 text-slate-100 outline-none placeholder:text-slate-500 focus:border-slate-600 ${className}`}
+    />
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Label({ children }: { children: React.ReactNode }) {
+  return <label className="text-sm font-medium text-slate-300">{children}</label>;
+}
+
+function NativeSelect({
+  options,
+  className = "",
+  ...props
+}: React.SelectHTMLAttributes<HTMLSelectElement> & {
+  options: { value: string; label: string }[];
+}) {
   return (
-    <div>
-      <label className="mb-2 block text-sm text-slate-300">{label}</label>
+    <select
+      {...props}
+      className={`h-11 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-4 text-slate-100 outline-none focus:border-slate-600 ${className}`}
+    >
+      {options.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function PrimaryButton({
+  children,
+  className = "",
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      {...props}
+      className={`inline-flex h-12 items-center justify-center rounded-2xl bg-blue-600 px-4 font-medium text-white hover:bg-blue-500 disabled:opacity-50 ${className}`}
+    >
       {children}
-    </div>
+    </button>
   );
 }
 
-function SummaryCard({ title, value, icon, tone }: { title: string; value: string; icon: React.ReactNode; tone: 'emerald' | 'rose' | 'blue' | 'amber' }) {
+function OutlineButton({
+  children,
+  className = "",
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      {...props}
+      className={`inline-flex h-12 items-center justify-center rounded-2xl border border-slate-700 bg-slate-950/50 px-4 font-medium text-slate-100 hover:bg-slate-900 ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function GhostButton({
+  children,
+  className = "",
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button
+      {...props}
+      className={`inline-flex h-10 min-w-10 items-center justify-center rounded-xl border border-slate-800 bg-slate-950/50 px-3 text-slate-300 hover:bg-slate-800 hover:text-white ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function TabButton({
+  children,
+  active,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean }) {
+  return (
+    <button
+      {...props}
+      className={`rounded-xl px-4 py-3 text-sm font-medium transition ${
+        active ? "bg-slate-100 text-slate-900" : "text-slate-300 hover:bg-slate-800"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function SummaryCard({
+  title,
+  value,
+  icon,
+  tone,
+}: {
+  title: string;
+  value: string;
+  icon: React.ReactNode;
+  tone: Tone;
+}) {
   const toneMap = {
-    emerald: 'from-emerald-500/15 to-slate-900 text-emerald-300',
-    rose: 'from-rose-500/15 to-slate-900 text-rose-300',
-    blue: 'from-blue-500/15 to-slate-900 text-blue-300',
-    amber: 'from-amber-500/15 to-slate-900 text-amber-300',
+    emerald: "from-emerald-500/15 to-slate-900 text-emerald-300",
+    rose: "from-rose-500/15 to-slate-900 text-rose-300",
+    blue: "from-blue-500/15 to-slate-900 text-blue-300",
+    amber: "from-amber-500/15 to-slate-900 text-amber-300",
   };
   return (
-    <AppCard className={`bg-gradient-to-br ${toneMap[tone]}`}>
-      <div className="p-5">
-        <div className="mb-4 inline-flex rounded-2xl bg-slate-950/40 p-3">{icon}</div>
-        <div className="text-sm text-slate-400">{title}</div>
-        <div className="mt-2 text-2xl font-bold tracking-tight text-slate-50">{value}</div>
-      </div>
-    </AppCard>
+    <div className={`rounded-3xl border border-slate-800 bg-gradient-to-br ${toneMap[tone]} p-5 backdrop-blur-xl`}>
+      <div className="mb-4 inline-flex rounded-2xl bg-slate-950/40 p-3">{icon}</div>
+      <div className="text-sm text-slate-400">{title}</div>
+      <div className="mt-2 text-2xl font-bold tracking-tight text-slate-50">{value}</div>
+    </div>
   );
 }
 
