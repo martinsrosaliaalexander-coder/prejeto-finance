@@ -1,939 +1,694 @@
 'use client';
 
-import { useEffect, useMemo, useState } from "react";
-import jsPDF from "jspdf";
+import { useMemo, useState } from 'react';
 import {
+  ArrowDownRight,
+  ArrowUpRight,
   BarChart3,
-  Calendar,
+  Bell,
+  CreditCard,
   Download,
-  FileText,
-  Filter,
+  DollarSign,
   Lock,
   LogOut,
   Mail,
-  PieChart as PieChartIcon,
-  Plus,
-  Receipt,
+  PieChart,
   Search,
-  Trash2,
+  Settings,
+  ShieldCheck,
+  Sparkles,
   TrendingDown,
   TrendingUp,
-  Users,
   Wallet,
-  DollarSign,
-} from "lucide-react";
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-  Tooltip,
-  PieChart,
-  Pie,
-  Cell,
-  BarChart,
-  Bar,
-} from "recharts";
+} from 'lucide-react';
 
-const initialTransactions = [
+type CardItem = {
+  title: string;
+  value: number;
+  change: string;
+  positive: boolean;
+  icon: React.ComponentType<{ className?: string }>;
+};
+
+type TransactionItem = {
+  title: string;
+  category: string;
+  date: string;
+  amount: number;
+  type: 'entrada' | 'saida';
+  status: 'Pago' | 'Pendente' | 'Processando';
+};
+
+const cards: CardItem[] = [
   {
-    id: 1,
-    date: "2026-03-03",
-    type: "entrada",
-    category: "Serviços",
-    description: "Landing page - cliente clínica",
-    amount: 850,
-    status: "recebido",
-    client: "Clínica Bella Vita",
+    title: 'Saldo disponível',
+    value: 24890.42,
+    change: '+8,2% no mês',
+    positive: true,
+    icon: Wallet,
   },
   {
-    id: 2,
-    date: "2026-03-04",
-    type: "saida",
-    category: "Infraestrutura",
-    description: "Hospedagem anual",
-    amount: 219.9,
-    status: "pago",
-    client: "Opervio",
+    title: 'Receitas',
+    value: 18450.0,
+    change: '+12,4% vs. mês anterior',
+    positive: true,
+    icon: TrendingUp,
   },
   {
-    id: 3,
-    date: "2026-03-08",
-    type: "entrada",
-    category: "Projetos",
-    description: "Sinal software personalizado",
-    amount: 1200,
-    status: "recebido",
-    client: "Studio Performance",
+    title: 'Despesas',
+    value: 6398.33,
+    change: '-3,8% vs. mês anterior',
+    positive: true,
+    icon: TrendingDown,
   },
   {
-    id: 4,
-    date: "2026-03-11",
-    type: "saida",
-    category: "Ferramentas",
-    description: "Assinatura design",
-    amount: 59.9,
-    status: "pago",
-    client: "Opervio",
-  },
-  {
-    id: 5,
-    date: "2026-03-13",
-    type: "saida",
-    category: "Marketing",
-    description: "Impulsionamento",
-    amount: 80,
-    status: "pago",
-    client: "Instagram",
+    title: 'Cartões e cobranças',
+    value: 2189.9,
+    change: '4 itens em aberto',
+    positive: false,
+    icon: CreditCard,
   },
 ];
 
-const categories = [
-  "Serviços",
-  "Projetos",
-  "Consultoria",
-  "Infraestrutura",
-  "Ferramentas",
-  "Marketing",
-  "Transporte",
-  "Outros",
+const chartData = [
+  { label: 'Jan', income: 58, expense: 34 },
+  { label: 'Fev', income: 64, expense: 30 },
+  { label: 'Mar', income: 72, expense: 41 },
+  { label: 'Abr', income: 69, expense: 38 },
+  { label: 'Mai', income: 80, expense: 44 },
+  { label: 'Jun', income: 76, expense: 36 },
 ];
 
-const chartColors = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ef4444", "#06b6d4"];
+const transactions: TransactionItem[] = [
+  {
+    title: 'Assinatura SaaS',
+    category: 'Software',
+    date: '12/03/2026',
+    amount: 289.9,
+    type: 'saida',
+    status: 'Pago',
+  },
+  {
+    title: 'Recebimento cliente Alpha',
+    category: 'Receita',
+    date: '11/03/2026',
+    amount: 3250.0,
+    type: 'entrada',
+    status: 'Pago',
+  },
+  {
+    title: 'Internet empresarial',
+    category: 'Infraestrutura',
+    date: '10/03/2026',
+    amount: 189.9,
+    type: 'saida',
+    status: 'Pago',
+  },
+  {
+    title: 'Projeto Landing Page',
+    category: 'Serviços',
+    date: '09/03/2026',
+    amount: 1450.0,
+    type: 'entrada',
+    status: 'Processando',
+  },
+  {
+    title: 'Licença operacional',
+    category: 'Administrativo',
+    date: '07/03/2026',
+    amount: 420.0,
+    type: 'saida',
+    status: 'Pendente',
+  },
+];
 
-function money(value: number) {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(value || 0);
+function formatBRL(value: number) {
+  const fixed = value.toFixed(2);
+  const [intPart, decimalPart] = fixed.split('.');
+  const formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `R$ ${formattedInt},${decimalPart}`;
 }
 
-function dateBR(value: string) {
-  return new Intl.DateTimeFormat("pt-BR").format(new Date(`${value}T12:00:00`));
+function statusClass(status: TransactionItem['status']) {
+  if (status === 'Pago') {
+    return 'bg-emerald-500/15 text-emerald-300 border border-emerald-400/20';
+  }
+  if (status === 'Processando') {
+    return 'bg-blue-500/15 text-blue-300 border border-blue-400/20';
+  }
+  return 'bg-amber-500/15 text-amber-300 border border-amber-400/20';
 }
-
-function monthLabel(monthNumber: number) {
-  const labels = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-  return labels[monthNumber - 1] || "";
-}
-
-type Tone = "emerald" | "rose" | "blue" | "amber";
-type TabKey = "dashboard" | "lancamentos" | "relatorios";
 
 export default function OpervioFinanceLiteApp() {
-  const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
-  const [isLogged, setIsLogged] = useState(false);
-  const [loginForm] = useState({ email: "admin@opervio.com", password: "123456" });
-  const [loginInput, setLoginInput] = useState({ email: "admin@opervio.com", password: "123456" });
-  const [transactions, setTransactions] = useState<typeof initialTransactions>([]);
-  const [search, setSearch] = useState("");
-  const [filterType, setFilterType] = useState("todos");
-  const [monthFilter, setMonthFilter] = useState("todos");
-  const [form, setForm] = useState({
-    date: new Date().toISOString().slice(0, 10),
-    type: "entrada",
-    category: "Serviços",
-    description: "",
-    amount: "",
-    status: "recebido",
-    client: "",
+  const [authenticated, setAuthenticated] = useState(false);
+  const [loadingLogin, setLoadingLogin] = useState(false);
+  const [search, setSearch] = useState('');
+  const [loginInput, setLoginInput] = useState({
+    email: '',
+    password: '',
   });
 
-  useEffect(() => {
-    const savedTransactions = localStorage.getItem("opervio-finance-lite-transactions");
-    const savedAuth = localStorage.getItem("opervio-finance-lite-auth");
-    if (savedTransactions) {
-      setTransactions(JSON.parse(savedTransactions));
-    } else {
-      setTransactions(initialTransactions);
-    }
-    if (savedAuth === "true") setIsLogged(true);
-  }, []);
+  const filteredTransactions = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return transactions;
 
-  useEffect(() => {
-    if (transactions.length) {
-      localStorage.setItem("opervio-finance-lite-transactions", JSON.stringify(transactions));
-    }
-  }, [transactions]);
-
-  useEffect(() => {
-    localStorage.setItem("opervio-finance-lite-auth", String(isLogged));
-  }, [isLogged]);
-
-  const filtered = useMemo(() => {
     return transactions.filter((item) => {
-      const text = `${item.description} ${item.category} ${item.client}`.toLowerCase();
-      const textMatch = text.includes(search.toLowerCase());
-      const typeMatch = filterType === "todos" ? true : item.type === filterType;
-      const monthMatch =
-        monthFilter === "todos"
-          ? true
-          : new Date(item.date).getMonth() + 1 === Number(monthFilter);
-      return textMatch && typeMatch && monthMatch;
+      return (
+        item.title.toLowerCase().includes(term) ||
+        item.category.toLowerCase().includes(term) ||
+        item.status.toLowerCase().includes(term)
+      );
     });
-  }, [transactions, search, filterType, monthFilter]);
+  }, [search]);
 
-  const totals = useMemo(() => {
-    const income = transactions.filter((i) => i.type === "entrada").reduce((acc, i) => acc + i.amount, 0);
-    const expense = transactions.filter((i) => i.type === "saida").reduce((acc, i) => acc + i.amount, 0);
-    const pending = transactions.filter((i) => i.status === "pendente").reduce((acc, i) => acc + i.amount, 0);
-    return {
-      income,
-      expense,
-      balance: income - expense,
-      pending,
-    };
-  }, [transactions]);
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
+    setLoadingLogin(true);
 
-  const monthlyData = useMemo(() => {
-    const map: Record<number, { month: number; entradas: number; saidas: number; saldo: number }> = {};
-    transactions.forEach((t) => {
-      const month = new Date(t.date).getMonth() + 1;
-      if (!map[month]) map[month] = { month, entradas: 0, saidas: 0, saldo: 0 };
-      if (t.type === "entrada") map[month].entradas += t.amount;
-      if (t.type === "saida") map[month].saidas += t.amount;
-      map[month].saldo = map[month].entradas - map[month].saidas;
-    });
-    return Object.values(map)
-      .sort((a, b) => a.month - b.month)
-      .map((item) => ({
-        ...item,
-        label: monthLabel(item.month),
-      }));
-  }, [transactions]);
+    try {
+      // Se você já tem autenticação real (ex.: Supabase),
+      // substitua apenas este trecho pela sua lógica atual.
+      await new Promise((resolve) => setTimeout(resolve, 700));
 
-  const expensesByCategory = useMemo(() => {
-    const grouped = transactions
-      .filter((t) => t.type === "saida")
-      .reduce<Record<string, number>>((acc, item) => {
-        acc[item.category] = (acc[item.category] || 0) + item.amount;
-        return acc;
-      }, {});
-    return Object.entries(grouped)
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, value]) => ({ name, value }));
-  }, [transactions]);
+      if (!loginInput.email || !loginInput.password) {
+        alert('Preencha e-mail e senha.');
+        return;
+      }
 
-  const topClients = useMemo(() => {
-    const grouped = transactions
-      .filter((t) => t.type === "entrada")
-      .reduce<Record<string, number>>((acc, item) => {
-        const key = item.client || "Sem cliente";
-        acc[key] = (acc[key] || 0) + item.amount;
-        return acc;
-      }, {});
-    return Object.entries(grouped)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([client, total]) => ({ client, total }));
-  }, [transactions]);
-
-  function handleLogin() {
-    if (loginInput.email === loginForm.email && loginInput.password === loginForm.password) {
-      setIsLogged(true);
+      setAuthenticated(true);
+    } finally {
+      setLoadingLogin(false);
     }
   }
 
   function handleLogout() {
-    setIsLogged(false);
+    setAuthenticated(false);
+    setLoginInput({ email: '', password: '' });
   }
 
-  function handleAddTransaction() {
-    if (!form.description.trim() || !form.amount) return;
-    const newItem = {
-      id: Date.now(),
-      date: form.date,
-      type: form.type,
-      category: form.category,
-      description: form.description,
-      amount: Number(form.amount),
-      status: form.status,
-      client: form.client,
-    };
-    setTransactions((prev) => [newItem, ...prev]);
-    setForm((prev) => ({ ...prev, description: "", amount: "", client: "" }));
-  }
-
-  function deleteTransaction(id: number) {
-    setTransactions((prev) => prev.filter((item) => item.id !== id));
-  }
-
-  function exportJSON() {
-    const blob = new Blob([JSON.stringify(transactions, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "opervio-finance-lite.json";
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function exportPDF() {
-    const pdf = new jsPDF();
-    pdf.setFontSize(18);
-    pdf.text("Opervio Finance Lite - Relatório", 14, 18);
-    pdf.setFontSize(11);
-    pdf.text(`Entradas: ${money(totals.income)}`, 14, 32);
-    pdf.text(`Saídas: ${money(totals.expense)}`, 14, 40);
-    pdf.text(`Saldo: ${money(totals.balance)}`, 14, 48);
-    pdf.text(`Pendências: ${money(totals.pending)}`, 14, 56);
-
-    let y = 72;
-    pdf.setFontSize(12);
-    pdf.text("Lançamentos:", 14, y);
-    y += 10;
-
-    filtered.slice(0, 18).forEach((item) => {
-      const line = `${dateBR(item.date)} | ${item.description} | ${item.client || "-"} | ${item.type} | ${money(item.amount)}`;
-      pdf.setFontSize(9);
-      pdf.text(line, 14, y);
-      y += 7;
-    });
-
-    pdf.save("relatorio-opervio-finance-lite.pdf");
-  }
-
-  if (!isLogged) {
+  if (!authenticated) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-50">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.18),transparent_30%),radial-gradient(circle_at_80%_20%,rgba(16,185,129,0.12),transparent_20%)]" />
-        <div className="relative mx-auto flex min-h-screen max-w-6xl items-center px-4 py-10">
-          <div className="grid w-full gap-6 lg:grid-cols-2">
-            <div className="flex flex-col justify-center">
-              <div className="mb-4 inline-flex w-fit items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">
-                <Wallet className="h-4 w-4" />
-                Opervio Finance Lite
-              </div>
-              <h1 className="text-4xl font-bold tracking-tight md:text-5xl">Controle financeiro com cara de produto real.</h1>
-              <p className="mt-4 max-w-xl text-slate-300">
-                Faça login para acessar o dashboard, os gráficos, os lançamentos e a geração de relatórios PDF.
-              </p>
-              <div className="mt-6 flex flex-wrap gap-3">
-                <Badge>Login simples</Badge>
-                <Badge>Dashboard</Badge>
-                <Badge>Gráficos</Badge>
-                <Badge>PDF</Badge>
-              </div>
-            </div>
+      <>
+        <main className="relative min-h-screen overflow-hidden bg-[#07111F] text-slate-50">
+          <div className="absolute inset-0 -z-20 bg-[radial-gradient(circle_at_top,rgba(37,99,235,0.20),transparent_30%),linear-gradient(180deg,#07111F_0%,#081426_100%)]" />
+          <div className="soft-grid absolute inset-0 -z-10 opacity-30" />
+          <div className="absolute left-[-120px] top-[-60px] h-72 w-72 rounded-full bg-blue-600/20 blur-3xl" />
+          <div className="absolute bottom-[-80px] right-[-90px] h-80 w-80 rounded-full bg-cyan-400/10 blur-3xl" />
 
-            <div>
-              <Card>
-                <CardHeader>
-                  <CardTitle>
-                    <div className="flex items-center gap-2 text-xl">
-                      <Lock className="h-5 w-5 text-blue-300" />
-                      Entrar no sistema
-                    </div>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="grid gap-2">
-                      <Label>E-mail</Label>
-                      <div className="relative">
-                        <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                        <TextInput
-                          value={loginInput.email}
-                          onChange={(e) => setLoginInput((prev) => ({ ...prev, email: e.target.value }))}
-                          className="pl-10"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid gap-2">
-                      <Label>Senha</Label>
-                      <TextInput
-                        type="password"
-                        value={loginInput.password}
-                        onChange={(e) => setLoginInput((prev) => ({ ...prev, password: e.target.value }))}
+          <div className="mx-auto grid min-h-screen max-w-7xl grid-cols-1 items-center gap-12 px-6 py-10 lg:grid-cols-[1.1fr_0.9fr]">
+            <section className="max-w-2xl">
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300 backdrop-blur-xl">
+                <Sparkles className="h-3.5 w-3.5 text-blue-300" />
+                OPERVIO FINANCE LITE
+              </div>
+
+              <h1 className="mt-6 max-w-2xl text-4xl font-semibold leading-tight tracking-[-0.04em] text-white md:text-6xl">
+                Controle financeiro com visual premium e operação real.
+              </h1>
+
+              <p className="mt-5 max-w-xl text-base leading-7 text-slate-400 md:text-lg">
+                Centralize indicadores, lançamentos, cobranças e relatórios em uma
+                interface refinada, confiável e pronta para apresentação comercial.
+              </p>
+
+              <div className="mt-8 grid gap-4 sm:grid-cols-3">
+                <div className="glass-card rounded-2xl p-4">
+                  <p className="text-sm text-slate-400">Dashboard elegante</p>
+                  <p className="mt-2 text-xl font-semibold text-white">KPIs + visão rápida</p>
+                </div>
+
+                <div className="glass-card rounded-2xl p-4">
+                  <p className="text-sm text-slate-400">Fluxo financeiro</p>
+                  <p className="mt-2 text-xl font-semibold text-white">Receitas e despesas</p>
+                </div>
+
+                <div className="glass-card rounded-2xl p-4">
+                  <p className="text-sm text-slate-400">Exportação</p>
+                  <p className="mt-2 text-xl font-semibold text-white">Relatórios e PDF</p>
+                </div>
+              </div>
+
+              <div className="mt-8 flex flex-wrap gap-3 text-sm text-slate-300">
+                <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">
+                  Login premium
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">
+                  Interface SaaS
+                </span>
+                <span className="rounded-full border border-white/10 bg-white/5 px-4 py-2">
+                  Pronto para demo
+                </span>
+              </div>
+            </section>
+
+            <section className="relative">
+              <div className="absolute inset-0 mx-auto h-72 w-72 rounded-full bg-blue-600/20 blur-3xl" />
+              <div className="glass-card premium-glow relative mx-auto w-full max-w-md rounded-[28px] p-6 md:p-8">
+                <div className="mb-8">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-300" />
+                    Área segura
+                  </div>
+
+                  <h2 className="mt-4 text-2xl font-semibold tracking-[-0.03em] text-white">
+                    Entrar no sistema
+                  </h2>
+
+                  <p className="mt-2 text-sm leading-6 text-slate-400">
+                    Acesse o painel financeiro com um layout mais sofisticado, moderno e
+                    pronto para impressionar.
+                  </p>
+                </div>
+
+                <form onSubmit={handleLogin} className="space-y-5">
+                  <div className="space-y-2">
+                    <label className="text-sm text-slate-300">E-mail</label>
+                    <div className="relative">
+                      <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                      <input
+                        type="email"
+                        value={loginInput.email}
+                        onChange={(e) =>
+                          setLoginInput((prev) => ({ ...prev, email: e.target.value }))
+                        }
+                        placeholder="admin@opervio.com"
+                        className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.06] pl-10 pr-4 text-sm text-slate-100 outline-none transition-all duration-200 placeholder:text-slate-500 focus:border-blue-500/70 focus:bg-white/[0.09] focus:ring-4 focus:ring-blue-500/10"
                       />
                     </div>
-                    <PrimaryButton onClick={handleLogin} className="w-full">
-                      Acessar dashboard
-                    </PrimaryButton>
-                    <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4 text-sm text-slate-400">
-                      Demo: admin@opervio.com / 123456
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm text-slate-300">Senha</label>
+                    <div className="relative">
+                      <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                      <input
+                        type="password"
+                        value={loginInput.password}
+                        onChange={(e) =>
+                          setLoginInput((prev) => ({ ...prev, password: e.target.value }))
+                        }
+                        placeholder="••••••••"
+                        className="h-12 w-full rounded-2xl border border-white/10 bg-white/[0.06] pl-10 pr-4 text-sm text-slate-100 outline-none transition-all duration-200 placeholder:text-slate-500 focus:border-blue-500/70 focus:bg-white/[0.09] focus:ring-4 focus:ring-blue-500/10"
+                      />
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            </div>
+
+                  <button
+                    type="submit"
+                    disabled={loadingLogin}
+                    className="inline-flex h-12 w-full items-center justify-center rounded-2xl bg-blue-600 px-4 text-sm font-medium text-white transition-all duration-200 hover:bg-blue-500 hover:shadow-[0_0_28px_rgba(37,99,235,0.35)] disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {loadingLogin ? 'Entrando...' : 'Acessar dashboard'}
+                  </button>
+                </form>
+
+                <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs leading-5 text-slate-400">
+                  Demo visual premium. Para manter sua autenticação real, troque apenas a
+                  função <span className="text-slate-200">handleLogin</span>.
+                </div>
+              </div>
+            </section>
           </div>
-        </div>
-      </div>
+        </main>
+
+        <style jsx global>{`
+          html,
+          body {
+            background: #07111f;
+          }
+
+          .soft-grid {
+            background-image:
+              linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+              linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 34px 34px;
+            mask-image: radial-gradient(circle at center, black 35%, transparent 100%);
+            -webkit-mask-image: radial-gradient(circle at center, black 35%, transparent 100%);
+          }
+
+          .glass-card {
+            background: rgba(11, 23, 48, 0.72);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+            box-shadow:
+              0 10px 30px rgba(0, 0, 0, 0.28),
+              inset 0 1px 0 rgba(255, 255, 255, 0.03);
+          }
+
+          .premium-glow {
+            box-shadow:
+              0 0 0 1px rgba(59, 130, 246, 0.1),
+              0 18px 50px rgba(37, 99, 235, 0.2),
+              inset 0 1px 0 rgba(255, 255, 255, 0.04);
+          }
+        `}</style>
+      </>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.18),transparent_30%),radial-gradient(circle_at_80%_20%,rgba(16,185,129,0.12),transparent_20%)]" />
-      <div className="relative mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8">
-        <div className="mb-6 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-          <Card>
-            <CardContent>
-              <div className="p-6 md:p-8">
-                <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-blue-300">
-                  <Wallet className="h-4 w-4" />
-                  Opervio Finance Lite
+    <>
+      <main className="min-h-screen bg-[#07111F] text-slate-50">
+        <div className="flex min-h-screen">
+          <aside className="hidden w-[270px] border-r border-white/10 bg-[#081326]/90 px-5 py-6 backdrop-blur-xl lg:block">
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p className="text-xs tracking-[0.25em] text-slate-400">OPERVIO</p>
+              <h2 className="mt-2 text-xl font-semibold tracking-[-0.03em] text-white">
+                OpenView Finance
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-slate-400">
+                Painel financeiro refinado para operação, análise e apresentação.
+              </p>
+            </div>
+
+            <nav className="mt-8 space-y-2">
+              <button className="flex w-full items-center gap-3 rounded-2xl border border-blue-400/20 bg-blue-500/10 px-4 py-3 text-left text-sm text-blue-200">
+                <PieChart className="h-4 w-4" />
+                Visão geral
+              </button>
+
+              <button className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm text-slate-300 transition hover:bg-white/5">
+                <BarChart3 className="h-4 w-4" />
+                Análises
+              </button>
+
+              <button className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm text-slate-300 transition hover:bg-white/5">
+                <CreditCard className="h-4 w-4" />
+                Cobranças
+              </button>
+
+              <button className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm text-slate-300 transition hover:bg-white/5">
+                <Download className="h-4 w-4" />
+                Exportações
+              </button>
+
+              <button className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm text-slate-300 transition hover:bg-white/5">
+                <Settings className="h-4 w-4" />
+                Configurações
+              </button>
+            </nav>
+
+            <div className="mt-8 rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p className="text-sm text-slate-300">Resumo do período</p>
+              <div className="mt-4 space-y-3 text-sm">
+                <div className="flex items-center justify-between text-slate-400">
+                  <span>Receitas</span>
+                  <span className="text-emerald-300">{formatBRL(18450)}</span>
                 </div>
-                <h1 className="text-3xl font-bold tracking-tight md:text-5xl">Painel financeiro simples, bonito e vendável.</h1>
-                <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-300 md:text-base">
-                  Um produto-base para autônomos, pequenos negócios e clientes da Opervio acompanharem o caixa com clareza e visual profissional.
-                </p>
-                <div className="mt-6 flex flex-wrap gap-3">
-                  <Badge>Login</Badge>
-                  <Badge>Dashboard</Badge>
-                  <Badge>Relatórios</Badge>
-                  <Badge>PDF</Badge>
-                  <Badge>Exportação</Badge>
+                <div className="flex items-center justify-between text-slate-400">
+                  <span>Despesas</span>
+                  <span className="text-rose-300">{formatBRL(6398.33)}</span>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-emerald-500/10 to-slate-900">
-            <CardContent>
-              <div className="flex h-full flex-col justify-between p-6">
-                <div>
-                  <div className="mb-3 inline-flex rounded-xl bg-emerald-500/15 p-3 text-emerald-300">
-                    <BarChart3 className="h-5 w-5" />
-                  </div>
-                  <h2 className="text-xl font-semibold">Visão geral</h2>
-                  <p className="mt-2 text-sm leading-6 text-slate-300">
-                    Base ideal para evoluir para versão Pro com banco de dados, multiusuário e cobrança recorrente.
-                  </p>
+                <div className="flex items-center justify-between text-slate-400">
+                  <span>Saldo</span>
+                  <span className="text-white">{formatBRL(24890.42)}</span>
                 </div>
-                <div className="mt-5 grid gap-3">
-                  <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
-                    <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Saldo atual</div>
-                    <div className="mt-2 text-3xl font-bold text-emerald-300">{money(totals.balance)}</div>
-                  </div>
-                  <div className="flex gap-2">
-                    <PrimaryButton onClick={exportPDF} className="flex-1">
-                      <FileText className="mr-2 h-4 w-4" /> PDF
-                    </PrimaryButton>
-                    <OutlineButton onClick={exportJSON} className="flex-1">
-                      <Download className="mr-2 h-4 w-4" /> JSON
-                    </OutlineButton>
-                    <GhostButton onClick={handleLogout}>
-                      <LogOut className="h-4 w-4" />
-                    </GhostButton>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard title="Entradas" value={money(totals.income)} icon={<TrendingUp className="h-5 w-5" />} tone="emerald" />
-          <SummaryCard title="Saídas" value={money(totals.expense)} icon={<TrendingDown className="h-5 w-5" />} tone="rose" />
-          <SummaryCard title="Saldo" value={money(totals.balance)} icon={<DollarSign className="h-5 w-5" />} tone="blue" />
-          <SummaryCard title="Pendências" value={money(totals.pending)} icon={<Receipt className="h-5 w-5" />} tone="amber" />
-        </div>
-
-        <div className="space-y-6">
-          <div className="grid w-full grid-cols-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-1">
-            <TabButton active={activeTab === "dashboard"} onClick={() => setActiveTab("dashboard")}>Dashboard</TabButton>
-            <TabButton active={activeTab === "lancamentos"} onClick={() => setActiveTab("lancamentos")}>Lançamentos</TabButton>
-            <TabButton active={activeTab === "relatorios"} onClick={() => setActiveTab("relatorios")}>Relatórios</TabButton>
-          </div>
-
-          {activeTab === "dashboard" && (
-            <div className="space-y-6">
-              <div className="grid gap-6 xl:grid-cols-2">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>
-                      <div className="flex items-center gap-2 text-xl">
-                        <BarChart3 className="h-5 w-5 text-blue-300" />
-                        Evolução mensal do caixa
-                      </div>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[320px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={monthlyData}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                          <XAxis dataKey="label" stroke="#94a3b8" />
-                          <YAxis stroke="#94a3b8" />
-                          <Tooltip contentStyle={{ background: "#020617", border: "1px solid #1e293b", borderRadius: 16 }} />
-                          <Line type="monotone" dataKey="entradas" stroke="#10b981" strokeWidth={3} />
-                          <Line type="monotone" dataKey="saidas" stroke="#ef4444" strokeWidth={3} />
-                          <Line type="monotone" dataKey="saldo" stroke="#3b82f6" strokeWidth={3} />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>
-                      <div className="flex items-center gap-2 text-xl">
-                        <PieChartIcon className="h-5 w-5 text-amber-300" />
-                        Despesas por categoria
-                      </div>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[320px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie data={expensesByCategory} dataKey="value" nameKey="name" innerRadius={60} outerRadius={100} paddingAngle={3}>
-                            {expensesByCategory.map((entry, index) => (
-                              <Cell key={entry.name} fill={chartColors[index % chartColors.length]} />
-                            ))}
-                          </Pie>
-                          <Tooltip contentStyle={{ background: "#020617", border: "1px solid #1e293b", borderRadius: 16 }} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <div className="grid gap-6 xl:grid-cols-2">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>
-                      <div className="flex items-center gap-2 text-xl">
-                        <Users className="h-5 w-5 text-emerald-300" />
-                        Top clientes por receita
-                      </div>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="h-[320px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={topClients} layout="vertical" margin={{ left: 10, right: 10 }}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                          <XAxis type="number" stroke="#94a3b8" />
-                          <YAxis type="category" dataKey="client" stroke="#94a3b8" width={110} />
-                          <Tooltip contentStyle={{ background: "#020617", border: "1px solid #1e293b", borderRadius: 16 }} />
-                          <Bar dataKey="total" radius={[0, 10, 10, 0]} fill="#10b981" />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>
-                      <div className="flex items-center gap-2 text-xl">
-                        <Calendar className="h-5 w-5 text-blue-300" />
-                        Resumo operacional
-                      </div>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <InfoRow label="Total de lançamentos" value={String(transactions.length)} />
-                      <InfoRow label="Entradas registradas" value={String(transactions.filter((t) => t.type === "entrada").length)} />
-                      <InfoRow label="Saídas registradas" value={String(transactions.filter((t) => t.type === "saida").length)} />
-                      <InfoRow label="Receitas pendentes" value={money(transactions.filter((t) => t.status === "pendente").reduce((a, b) => a + b.amount, 0))} />
-                      <InfoRow label="Maior cliente" value={topClients[0]?.client || "—"} />
-                    </div>
-                  </CardContent>
-                </Card>
               </div>
             </div>
-          )}
 
-          {activeTab === "lancamentos" && (
-            <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-              <Card>
-                <CardHeader>
-                  <CardTitle>
-                    <div className="flex items-center gap-2 text-xl">
-                      <Plus className="h-5 w-5 text-blue-300" />
-                      Novo lançamento
-                    </div>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid gap-4">
-                    <div className="grid gap-2">
-                      <Label>Descrição</Label>
-                      <TextInput
-                        value={form.description}
-                        onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-                        placeholder="Ex.: Pagamento cliente X"
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label>Cliente / origem</Label>
-                      <TextInput
-                        value={form.client}
-                        onChange={(e) => setForm((prev) => ({ ...prev, client: e.target.value }))}
-                        placeholder="Ex.: Clínica Bella Vita"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="grid gap-2">
-                        <Label>Valor</Label>
-                        <TextInput
-                          type="number"
-                          value={form.amount}
-                          onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))}
-                          placeholder="0,00"
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label>Data</Label>
-                        <TextInput
-                          type="date"
-                          value={form.date}
-                          onChange={(e) => setForm((prev) => ({ ...prev, date: e.target.value }))}
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="grid gap-2">
-                        <Label>Tipo</Label>
-                        <NativeSelect
-                          value={form.type}
-                          onChange={(e) => setForm((prev) => ({ ...prev, type: e.target.value }))}
-                          options={[
-                            { value: "entrada", label: "Entrada" },
-                            { value: "saida", label: "Saída" },
-                          ]}
-                        />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label>Status</Label>
-                        <NativeSelect
-                          value={form.status}
-                          onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}
-                          options={[
-                            { value: "recebido", label: "Recebido" },
-                            { value: "pendente", label: "Pendente" },
-                            { value: "pago", label: "Pago" },
-                          ]}
-                        />
-                      </div>
-                    </div>
-                    <div className="grid gap-2">
-                      <Label>Categoria</Label>
-                      <NativeSelect
-                        value={form.category}
-                        onChange={(e) => setForm((prev) => ({ ...prev, category: e.target.value }))}
-                        options={categories.map((category) => ({ value: category, label: category }))}
-                      />
-                    </div>
-                    <PrimaryButton onClick={handleAddTransaction}>
-                      Adicionar lançamento
-                    </PrimaryButton>
-                  </div>
-                </CardContent>
-              </Card>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="mt-8 flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200 transition hover:bg-white/10"
+            >
+              <LogOut className="h-4 w-4" />
+              Sair
+            </button>
+          </aside>
 
-              <Card>
-                <CardHeader>
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <CardTitle>Lançamentos</CardTitle>
-                    <div className="flex flex-col gap-3 md:flex-row">
-                      <div className="relative min-w-[220px]">
-                        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                        <TextInput
-                          value={search}
-                          onChange={(e) => setSearch(e.target.value)}
-                          placeholder="Buscar descrição, categoria ou cliente"
-                          className="pl-10"
-                        />
-                      </div>
-                      <div className="flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 px-3">
-                        <Filter className="h-4 w-4 text-slate-500" />
-                        <select
-                          value={filterType}
-                          onChange={(e) => setFilterType(e.target.value)}
-                          className="h-10 bg-transparent text-sm text-slate-200 outline-none"
-                        >
-                          <option value="todos">Todos</option>
-                          <option value="entrada">Entradas</option>
-                          <option value="saida">Saídas</option>
-                        </select>
-                      </div>
-                      <div className="flex items-center gap-2 rounded-2xl border border-slate-800 bg-slate-950/70 px-3">
-                        <Calendar className="h-4 w-4 text-slate-500" />
-                        <select
-                          value={monthFilter}
-                          onChange={(e) => setMonthFilter(e.target.value)}
-                          className="h-10 bg-transparent text-sm text-slate-200 outline-none"
-                        >
-                          <option value="todos">Todos os meses</option>
-                          {Array.from({ length: 12 }).map((_, i) => (
-                            <option key={i + 1} value={String(i + 1)}>
-                              {monthLabel(i + 1)}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
+          <section className="flex-1">
+            <header className="sticky top-0 z-20 border-b border-white/10 bg-[#07111F]/80 backdrop-blur-xl">
+              <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 md:px-6">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.25em] text-slate-500">
+                    Dashboard premium
+                  </p>
+                  <h1 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-white">
+                    Visão geral financeira
+                  </h1>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="relative hidden md:block">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                    <input
+                      type="text"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Buscar lançamentos..."
+                      className="h-11 w-[280px] rounded-2xl border border-white/10 bg-white/[0.06] pl-10 pr-4 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-blue-500/60 focus:ring-4 focus:ring-blue-500/10"
+                    />
                   </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {filtered.map((item) => (
-                      <div key={item.id} className="grid gap-3 rounded-2xl border border-slate-800 bg-slate-950/60 p-4 md:grid-cols-[1fr_auto_auto] md:items-center">
+
+                  <button className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10">
+                    <Bell className="h-4 w-4" />
+                  </button>
+
+                  <button className="inline-flex h-11 items-center gap-2 rounded-2xl bg-blue-600 px-4 text-sm font-medium text-white transition hover:bg-blue-500 hover:shadow-[0_0_24px_rgba(37,99,235,0.3)]">
+                    <Download className="h-4 w-4" />
+                    Exportar
+                  </button>
+                </div>
+              </div>
+            </header>
+
+            <div className="mx-auto max-w-7xl px-4 py-6 md:px-6">
+              <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                {cards.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <div key={item.title} className="glass-card rounded-3xl p-5">
+                      <div className="flex items-start justify-between">
                         <div>
-                          <div className="font-medium text-slate-100">{item.description}</div>
-                          <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-400">
-                            <span className="rounded-full border border-slate-800 px-2 py-1">{item.category}</span>
-                            <span className="rounded-full border border-slate-800 px-2 py-1">{dateBR(item.date)}</span>
-                            <span className="rounded-full border border-slate-800 px-2 py-1">{item.status}</span>
-                            <span className="rounded-full border border-slate-800 px-2 py-1">{item.client || "Sem cliente"}</span>
-                          </div>
+                          <p className="text-sm text-slate-400">{item.title}</p>
+                          <h3 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-white">
+                            {formatBRL(item.value)}
+                          </h3>
                         </div>
-                        <div className={`text-right text-lg font-semibold ${item.type === "entrada" ? "text-emerald-300" : "text-rose-300"}`}>
-                          {item.type === "entrada" ? "+" : "-"} {money(item.amount)}
+
+                        <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-blue-300">
+                          <Icon className="h-5 w-5" />
                         </div>
-                        <div className="flex justify-end">
-                          <GhostButton onClick={() => deleteTransaction(item.id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </GhostButton>
+                      </div>
+
+                      <div
+                        className={`mt-4 inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs ${
+                          item.positive
+                            ? 'bg-emerald-500/15 text-emerald-300'
+                            : 'bg-amber-500/15 text-amber-300'
+                        }`}
+                      >
+                        {item.positive ? (
+                          <ArrowUpRight className="h-3.5 w-3.5" />
+                        ) : (
+                          <ArrowDownRight className="h-3.5 w-3.5" />
+                        )}
+                        {item.change}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="grid gap-6 xl:grid-cols-[1.4fr_0.8fr]">
+                <div className="glass-card rounded-3xl p-6">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <p className="text-sm text-slate-400">Fluxo mensal</p>
+                      <h2 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-white">
+                        Receitas vs. despesas
+                      </h2>
+                    </div>
+
+                    <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
+                      <span className="inline-block h-2 w-2 rounded-full bg-blue-400" />
+                      Receita
+                      <span className="ml-2 inline-block h-2 w-2 rounded-full bg-rose-400" />
+                      Despesa
+                    </div>
+                  </div>
+
+                  <div className="mt-8 grid h-[320px] grid-cols-6 items-end gap-4">
+                    {chartData.map((item) => (
+                      <div key={item.label} className="flex h-full flex-col items-center justify-end gap-3">
+                        <div className="flex h-full items-end gap-2">
+                          <div
+                            className="w-6 rounded-t-2xl bg-gradient-to-t from-blue-700 to-blue-400"
+                            style={{ height: `${item.income}%` }}
+                          />
+                          <div
+                            className="w-6 rounded-t-2xl bg-gradient-to-t from-rose-700 to-rose-400"
+                            style={{ height: `${item.expense}%` }}
+                          />
                         </div>
+                        <span className="text-xs text-slate-400">{item.label}</span>
                       </div>
                     ))}
-                    {filtered.length === 0 && (
-                      <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-950/50 p-10 text-center text-slate-400">
-                        Nenhum lançamento encontrado com os filtros atuais.
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="glass-card rounded-3xl p-6">
+                    <p className="text-sm text-slate-400">Saúde financeira</p>
+                    <h2 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-white">
+                      Indicadores rápidos
+                    </h2>
+
+                    <div className="mt-6 space-y-5">
+                      <div>
+                        <div className="mb-2 flex items-center justify-between text-sm">
+                          <span className="text-slate-300">Margem operacional</span>
+                          <span className="text-white">78%</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-white/5">
+                          <div className="h-2 w-[78%] rounded-full bg-blue-500" />
+                        </div>
                       </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
 
-          {activeTab === "relatorios" && (
-            <div className="grid gap-6 xl:grid-cols-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle>
-                    <div className="flex items-center gap-2 text-xl">
-                      <FileText className="h-5 w-5 text-blue-300" />
-                      Relatório executivo
-                    </div>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4 text-sm text-slate-300">
-                    <ReportLine label="Receita total" value={money(totals.income)} />
-                    <ReportLine label="Despesa total" value={money(totals.expense)} />
-                    <ReportLine label="Saldo operacional" value={money(totals.balance)} />
-                    <ReportLine label="Pendências" value={money(totals.pending)} />
-                    <ReportLine label="Quantidade de lançamentos" value={String(transactions.length)} />
-                    <div className="pt-4">
-                      <PrimaryButton onClick={exportPDF}>
-                        <FileText className="mr-2 h-4 w-4" />
-                        Gerar relatório PDF
-                      </PrimaryButton>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                      <div>
+                        <div className="mb-2 flex items-center justify-between text-sm">
+                          <span className="text-slate-300">Adimplência</span>
+                          <span className="text-white">92%</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-white/5">
+                          <div className="h-2 w-[92%] rounded-full bg-emerald-500" />
+                        </div>
+                      </div>
 
-              <Card>
-                <CardHeader>
-                  <CardTitle>
-                    <div className="flex items-center gap-2 text-xl">
-                      <Download className="h-5 w-5 text-emerald-300" />
-                      Exportação e continuidade
+                      <div>
+                        <div className="mb-2 flex items-center justify-between text-sm">
+                          <span className="text-slate-300">Comprometimento</span>
+                          <span className="text-white">41%</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-white/5">
+                          <div className="h-2 w-[41%] rounded-full bg-amber-500" />
+                        </div>
+                      </div>
                     </div>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4 text-sm text-slate-300">
-                    <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                      Os dados ficam salvos localmente no navegador durante esta demo.
-                    </div>
-                    <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
-                      Na versão real, isso será substituído por banco de dados e autenticação segura.
-                    </div>
-                    <OutlineButton onClick={exportJSON}>
-                      <Download className="mr-2 h-4 w-4" />
-                      Exportar backup JSON
-                    </OutlineButton>
                   </div>
-                </CardContent>
-              </Card>
+
+                  <div className="glass-card rounded-3xl p-6">
+                    <p className="text-sm text-slate-400">Resumo do sistema</p>
+                    <h2 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-white">
+                      Destaques
+                    </h2>
+
+                    <div className="mt-6 space-y-4">
+                      <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+                        <DollarSign className="mt-0.5 h-5 w-5 text-emerald-300" />
+                        <div>
+                          <p className="text-sm font-medium text-white">Saldo sólido</p>
+                          <p className="mt-1 text-sm leading-6 text-slate-400">
+                            Caixa positivo e crescimento saudável no período atual.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+                        <ShieldCheck className="mt-0.5 h-5 w-5 text-blue-300" />
+                        <div>
+                          <p className="text-sm font-medium text-white">Operação segura</p>
+                          <p className="mt-1 text-sm leading-6 text-slate-400">
+                            Interface pronta para autenticação e uso em ambiente produtivo.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="glass-card mt-6 rounded-3xl p-6">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-sm text-slate-400">Últimos lançamentos</p>
+                    <h2 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-white">
+                      Movimentações recentes
+                    </h2>
+                  </div>
+
+                  <div className="md:hidden">
+                    <div className="relative">
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                      <input
+                        type="text"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        placeholder="Buscar lançamentos..."
+                        className="h-11 w-full rounded-2xl border border-white/10 bg-white/[0.06] pl-10 pr-4 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-blue-500/60 focus:ring-4 focus:ring-blue-500/10"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 overflow-hidden rounded-3xl border border-white/10">
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-white/10">
+                      <thead className="bg-white/[0.03]">
+                        <tr className="text-left text-xs uppercase tracking-[0.18em] text-slate-500">
+                          <th className="px-5 py-4 font-medium">Descrição</th>
+                          <th className="px-5 py-4 font-medium">Categoria</th>
+                          <th className="px-5 py-4 font-medium">Data</th>
+                          <th className="px-5 py-4 font-medium">Status</th>
+                          <th className="px-5 py-4 text-right font-medium">Valor</th>
+                        </tr>
+                      </thead>
+
+                      <tbody className="divide-y divide-white/10 bg-transparent">
+                        {filteredTransactions.map((item) => (
+                          <tr key={`${item.title}-${item.date}`} className="text-sm">
+                            <td className="px-5 py-4 text-slate-200">{item.title}</td>
+                            <td className="px-5 py-4 text-slate-400">{item.category}</td>
+                            <td className="px-5 py-4 text-slate-400">{item.date}</td>
+                            <td className="px-5 py-4">
+                              <span className={`inline-flex rounded-full px-3 py-1 text-xs ${statusClass(item.status)}`}>
+                                {item.status}
+                              </span>
+                            </td>
+                            <td
+                              className={`px-5 py-4 text-right font-medium ${
+                                item.type === 'entrada' ? 'text-emerald-300' : 'text-rose-300'
+                              }`}
+                            >
+                              {item.type === 'entrada' ? '+' : '-'} {formatBRL(item.amount)}
+                            </td>
+                          </tr>
+                        ))}
+
+                        {filteredTransactions.length === 0 && (
+                          <tr>
+                            <td colSpan={5} className="px-5 py-10 text-center text-slate-500">
+                              Nenhum lançamento encontrado para a busca informada.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
+          </section>
         </div>
-      </div>
-    </div>
-  );
-}
+      </main>
 
-function Card({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return <div className={`rounded-3xl border border-slate-800 bg-slate-900/80 backdrop-blur-xl shadow-2xl shadow-blue-950/20 ${className}`}>{children}</div>;
-}
+      <style jsx global>{`
+        html,
+        body {
+          background: #07111f;
+        }
 
-function CardHeader({ children }: { children: React.ReactNode }) {
-  return <div className="p-6 pb-0">{children}</div>;
-}
-
-function CardContent({ children }: { children: React.ReactNode }) {
-  return <div className="p-6">{children}</div>;
-}
-
-function CardTitle({ children }: { children: React.ReactNode }) {
-  return <div className="text-xl font-semibold">{children}</div>;
-}
-
-function TextInput({
-  className = "",
-  ...props
-}: React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <input
-      {...props}
-      className={`h-11 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-4 text-slate-100 outline-none placeholder:text-slate-500 focus:border-slate-600 ${className}`}
-    />
-  );
-}
-
-function Label({ children }: { children: React.ReactNode }) {
-  return <label className="text-sm font-medium text-slate-300">{children}</label>;
-}
-
-function NativeSelect({
-  options,
-  className = "",
-  ...props
-}: React.SelectHTMLAttributes<HTMLSelectElement> & {
-  options: { value: string; label: string }[];
-}) {
-  return (
-    <select
-      {...props}
-      className={`h-11 w-full rounded-2xl border border-slate-800 bg-slate-950/80 px-4 text-slate-100 outline-none focus:border-slate-600 ${className}`}
-    >
-      {options.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-function PrimaryButton({
-  children,
-  className = "",
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <button
-      {...props}
-      className={`inline-flex h-12 items-center justify-center rounded-2xl bg-blue-600 px-4 font-medium text-white hover:bg-blue-500 disabled:opacity-50 ${className}`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function OutlineButton({
-  children,
-  className = "",
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <button
-      {...props}
-      className={`inline-flex h-12 items-center justify-center rounded-2xl border border-slate-700 bg-slate-950/50 px-4 font-medium text-slate-100 hover:bg-slate-900 ${className}`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function GhostButton({
-  children,
-  className = "",
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
-  return (
-    <button
-      {...props}
-      className={`inline-flex h-10 min-w-10 items-center justify-center rounded-xl border border-slate-800 bg-slate-950/50 px-3 text-slate-300 hover:bg-slate-800 hover:text-white ${className}`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function TabButton({
-  children,
-  active,
-  ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { active?: boolean }) {
-  return (
-    <button
-      {...props}
-      className={`rounded-xl px-4 py-3 text-sm font-medium transition ${
-        active ? "bg-slate-100 text-slate-900" : "text-slate-300 hover:bg-slate-800"
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
-function SummaryCard({
-  title,
-  value,
-  icon,
-  tone,
-}: {
-  title: string;
-  value: string;
-  icon: React.ReactNode;
-  tone: Tone;
-}) {
-  const toneMap = {
-    emerald: "from-emerald-500/15 to-slate-900 text-emerald-300",
-    rose: "from-rose-500/15 to-slate-900 text-rose-300",
-    blue: "from-blue-500/15 to-slate-900 text-blue-300",
-    amber: "from-amber-500/15 to-slate-900 text-amber-300",
-  };
-  return (
-    <div className={`rounded-3xl border border-slate-800 bg-gradient-to-br ${toneMap[tone]} p-5 backdrop-blur-xl`}>
-      <div className="mb-4 inline-flex rounded-2xl bg-slate-950/40 p-3">{icon}</div>
-      <div className="text-sm text-slate-400">{title}</div>
-      <div className="mt-2 text-2xl font-bold tracking-tight text-slate-50">{value}</div>
-    </div>
-  );
-}
-
-function Badge({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm text-slate-300">{children}</div>;
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950/60 px-4 py-4">
-      <span className="text-slate-400">{label}</span>
-      <strong className="text-slate-100">{value}</strong>
-    </div>
-  );
-}
-
-function ReportLine({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950/50 px-4 py-4">
-      <span className="text-slate-400">{label}</span>
-      <span className="font-semibold text-slate-100">{value}</span>
-    </div>
+        .glass-card {
+          background: rgba(11, 23, 48, 0.72);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          backdrop-filter: blur(18px);
+          -webkit-backdrop-filter: blur(18px);
+          box-shadow:
+            0 10px 30px rgba(0, 0, 0, 0.28),
+            inset 0 1px 0 rgba(255, 255, 255, 0.03);
+        }
+      `}</style>
+    </>
   );
 }
