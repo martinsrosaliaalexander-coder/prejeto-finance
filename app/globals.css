@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top, rgba(59,130,246,0.18), transparent 30%),
+    radial-gradient(circle at 80% 20%, rgba(16,185,129,0.12), transparent 20%),
+    #020617;
+  color: #f8fafc;
+}
+
+input, select, textarea {
+  outline: none;
+}
+
+.recharts-default-tooltip {
+  border-radius: 16px !important;
+  border: 1px solid #1e293b !important;
+  background: #020617 !important;
+}

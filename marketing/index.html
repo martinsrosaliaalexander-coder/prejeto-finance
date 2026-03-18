@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Opervio Finance Lite</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0} body{font-family:Inter,sans-serif;background:#020617;color:#f8fafc}
+    body:before{content:"";position:fixed;inset:0;background:radial-gradient(circle at top, rgba(59,130,246,.18), transparent 28%),radial-gradient(circle at 80% 20%, rgba(16,185,129,.12), transparent 18%);pointer-events:none}
+    .container{width:min(1120px,calc(100% - 32px));margin:auto}.section{padding:88px 0}.hero{padding:110px 0 70px}
+    .grid{display:grid;gap:24px;align-items:center}.hero-grid{grid-template-columns:1.1fr .9fr}.cards{grid-template-columns:repeat(3,1fr)}
+    .card{background:rgba(15,23,42,.7);border:1px solid rgba(148,163,184,.12);border-radius:28px;padding:28px;box-shadow:0 20px 70px rgba(0,0,0,.28)}
+    h1{font-size:clamp(2.5rem,6vw,4.8rem);line-height:1;letter-spacing:-.04em} h2{font-size:clamp(1.8rem,4vw,3rem);margin-bottom:12px} p{color:#94a3b8;line-height:1.75}
+    .badge{display:inline-flex;gap:10px;padding:10px 14px;border-radius:999px;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.2);color:#93c5fd;font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.18em;margin-bottom:18px}
+    .actions{display:flex;gap:14px;flex-wrap:wrap;margin-top:28px}.btn{display:inline-flex;align-items:center;justify-content:center;height:52px;padding:0 22px;border-radius:18px;text-decoration:none;font-weight:700}
+    .btn-primary{background:#2563eb;color:white}.btn-secondary{border:1px solid rgba(148,163,184,.18);color:#f8fafc;background:rgba(15,23,42,.7)}
+    .mock{padding:20px;background:linear-gradient(180deg,rgba(255,255,255,.10),rgba(255,255,255,.04));border:1px solid rgba(255,255,255,.12);border-radius:32px;transform:perspective(1200px) rotateY(-8deg)}
+    .screen{border-radius:24px;overflow:hidden;background:#0f172a;border:1px solid rgba(255,255,255,.08)} .top{height:52px;background:rgba(255,255,255,.04);display:flex;align-items:center;padding:0 16px;gap:8px}
+    .dot{width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.3)} .body{padding:22px;display:grid;gap:14px}.row{height:14px;border-radius:999px;background:linear-gradient(90deg,#dbeafe,#3b82f6)} .row.s{width:55%}.row.m{width:75%}.row.l{width:100%}
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:24px}.stat{padding:20px;border-radius:22px;background:rgba(15,23,42,.7);border:1px solid rgba(148,163,184,.12)} .stat strong{display:block;font-size:1.5rem}
+    .muted{color:#94a3b8}.center{text-align:center;max-width:720px;margin:0 auto 26px}.list{display:grid;gap:12px;margin-top:18px}.list div{padding:14px 16px;border-radius:18px;background:rgba(15,23,42,.58);border:1px solid rgba(148,163,184,.1)}
+    footer{padding:34px 0 60px;color:#94a3b8;text-align:center}
+    @media (max-width:980px){.hero-grid,.cards,.stats{grid-template-columns:1fr}.mock{transform:none}}
+  </style>
+</head>
+<body>
+  <section class="hero">
+    <div class="container grid hero-grid">
+      <div>
+        <div class="badge">Opervio Finance Lite</div>
+        <h1>Controle financeiro com visual premium e operação simples.</h1>
+        <p style="margin-top:18px">Produto da Opervio criado para autônomos, profissionais e pequenos negócios acompanharem caixa, despesas, receitas e relatórios em uma interface moderna, rápida e elegante.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="#modulos">Ver módulos</a>
+          <a class="btn btn-secondary" href="#deploy">Supabase + Vercel</a>
+        </div>
+        <div class="stats">
+          <div class="stat"><strong>Login</strong><span class="muted">Supabase Auth</span></div>
+          <div class="stat"><strong>Dashboard</strong><span class="muted">gráficos e KPIs</span></div>
+          <div class="stat"><strong>PDF</strong><span class="muted">relatório executivo</span></div>
+          <div class="stat"><strong>Cloud</strong><span class="muted">Vercel ready</span></div>
+        </div>
+      </div>
+      <div class="mock">
+        <div class="screen">
+          <div class="top"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+          <div class="body">
+            <div class="row s"></div><div class="row l"></div><div class="row m"></div>
+            <div class="card" style="padding:18px;border-radius:22px;background:rgba(2,6,23,.5)">
+              <div class="row s"></div><div class="row l" style="margin-top:10px"></div><div class="row m" style="margin-top:10px"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"><div class="card" style="padding:16px"></div><div class="card" style="padding:16px"></div><div class="card" style="padding:16px"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="modulos">
+    <div class="container">
+      <div class="center"><h2>Módulos do produto</h2><p>Pensado para sair do zero e já parecer um software profissional no catálogo da Opervio.</p></div>
+      <div class="grid cards">
+        <div class="card"><h3>Autenticação</h3><p>Login e cadastro reais com Supabase Auth. Base pronta para permissões e múltiplos usuários no futuro.</p></div>
+        <div class="card"><h3>Dashboard</h3><p>Indicadores, gráficos mensais, despesas por categoria e ranking de clientes por receita.</p></div>
+        <div class="card"><h3>Relatórios</h3><p>Exportação em JSON e geração de PDF executivo para apresentação ou controle interno.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container grid hero-grid">
+      <div>
+        <h2>Ideal para vender como produto-base</h2>
+        <p>O Finance Lite pode ser adaptado para consultórios, profissionais liberais, estúdios, agências e operações administrativas leves.</p>
+        <div class="list">
+          <div>Cadastro de entradas e saídas</div>
+          <div>Filtros por texto, tipo e mês</div>
+          <div>Cliente ou origem do lançamento</div>
+          <div>Base pronta para contas a pagar/receber</div>
+        </div>
+      </div>
+      <div class="card"><h3 style="margin-bottom:12px">Possíveis evoluções</h3><p>Multiempresa, cobrança recorrente, centro de custos, anexos, edição de lançamentos, categorias customizadas, assinatura mensal e área administrativa.</p></div>
+    </div>
+  </section>
+
+  <section class="section" id="deploy">
+    <div class="container center">
+      <h2>Deploy profissional com Supabase + Vercel</h2>
+      <p>Projeto preparado para autenticação, banco de dados online e publicação moderna com deploy contínuo.</p>
+      <div class="actions" style="justify-content:center"><a class="btn btn-primary" href="#">Pronto para publicar</a></div>
+    </div>
+  </section>
+
+  <footer>
+    Opervio Finance Lite · Produto da Opervio Solutions
+  </footer>
+</body>
+</html>
